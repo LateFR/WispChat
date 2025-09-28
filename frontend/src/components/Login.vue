@@ -28,7 +28,7 @@
     <div class="min-h-screen bg-base-200 flex items-center justify-center p-4">
 
         <!-- La carte de connexion -->
-        <div class="card w-full max-w-sm bg-base-100 shadow-xl">
+        <div class="card w-full max-w-[500px] bg-base-100 shadow-xl">
             <div class="card-body">
                 
                 <!-- Titre de la carte -->

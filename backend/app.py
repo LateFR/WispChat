@@ -56,6 +56,16 @@ def validate_token(token: str):
         return Response(status_code=200, content=username)
     else:
         return Response(status_code=400, content="Invalid token")
+    
+@app.get("/token/logout")
+async def logout(token: str):
+    username = verify_token(token)
+    if username:
+        if username in connections:
+            await connections[username].logout()
+        return Response(status_code=200, content="Logged out")
+    else:
+        return Response(status_code=400, content="Invalid token")
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
@@ -96,13 +106,20 @@ class User():
         connections[username] = self
     
     async def logout(self):
-        
+    # Supprimer l'utilisateur des connexions et des rooms d'abord
         if self.username in connections:
             connections.pop(self.username)
-        self.username = None
         
-        for room in self.my_rooms:
-            await self.leave_room({"room": room}, False)
+        # Nettoyer les rooms sans envoyer de messages
+        for room in list(self.my_rooms):  # list() pour éviter modification en boucle
+            await self.leave_room({"room": room}, verbose=False)
+
+        # Fermer la WS si elle est ouverte
+        try:
+            await self.ws.close()
+        except RuntimeError:
+            # La connexion est déjà fermée
+            pass
         
     async def join_room(self, content: dict):
         room_name = content["room"]
@@ -114,7 +131,7 @@ class User():
         room_name = content["room"]
         if room_name in self.my_rooms:
             self.my_rooms.remove(room_name)
-            rooms[room_name].remove(self)
+            rooms[room_name].remove(self.username)
         if verbose:
             await self.send_response(f"Left room {room_name}", "leave_room")
     async def send_message(self, content: dict):

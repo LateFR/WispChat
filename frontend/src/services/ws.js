@@ -54,6 +54,7 @@ function reconnect() {
     const token = localStorage.getItem("token")
     const username = localStorage.getItem("username")
     store = useUserStore()
+    if (!store.loggedIn){ console.log("Logged out, do not reconnect"); return}
     if (token && username) {
         store.login(username, token)
         initWebSocket()
@@ -96,7 +97,8 @@ function parsedMessages() {
     return messages.value.map(message => {
         return {
             message: message.content,
-            from: message.from_user
+            from: message.from_user,
+            room: message.from_room
         }
     })
 }

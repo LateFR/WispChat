@@ -18,7 +18,7 @@ async function get_and_process_token(username) {
 
     return token
   } else if (response.status === 403) {
-    throw new Error(`Username ${username} already exists`)
+    throw new Error(`Username ${username} already taken`)
   } else {
     const text = await response.text()
     throw new Error("Failed to get token: " + text)
@@ -28,6 +28,19 @@ async function get_and_process_token(username) {
 
 export async function validate_token(token) {
     const response = await fetch("http://192.168.1.49:5000/token/validate?token=" + token, {
+        method: "GET"
+    })
+    if (response.status === 200) {
+        return response.text().then(text => {
+            return text
+        })
+    } else {
+        return null
+    }
+}
+
+export async function logout(token) {
+    const response = await fetch("http://192.168.1.49:5000/token/logout?token=" + token, {
         method: "GET"
     })
     if (response.status === 200) {
