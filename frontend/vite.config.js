@@ -15,5 +15,11 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     },
+  },
+  server: {
+    proxy: {
+      '/token': 'http://192.178.1.49:5000',
+      '/ws': 'ws://192.178.1.49:5000'
+    }
   }
 })

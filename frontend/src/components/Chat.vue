@@ -7,11 +7,9 @@
   const newMessage = ref('')
   const store = useUserStore()
 
-  if (!store.loggedIn) {
-    router.push("/login")
-  } else {
+    ws.initWebSocket()  
     onMounted(() => {setTimeout(() => {ws.joinRoom("room1")}, 1000)})
-  }
+  
 </script>
 
 <template>

@@ -1,29 +1,27 @@
 <script setup>
     import { useUserStore } from '@/stores/user';
     import { ref, computed, watch } from 'vue'
-    import  ws from '@/services/ws'
+    import login from '@/services/login'
     import router from '@/router';
     const store = useUserStore()
     const username = ref("")
-    function login() {
-        ws.login(username.value)
-        store.login(username.value)
-        username.value = ""
-    }
-    watch(() => ws.events.value.length, 
-        (newLen) => {
-            const event = ws.events.value[ws.events.value.length - 1]
-            if (event && event.login) {
+    const login_error = ref("")
+    function handleLogin() {
+        if (!username.value) return
+        try {
+            login.get_and_process_token(username.value).then(token => {
+                if (!token) return
+                store.login(username.value, token)
+                username.value = ""
+                console.log("Logged in")
                 router.push("/")
-            }
+            })
+        } catch (error) {
+            console.error(error)
+            login_error.value = error.message
+            return
         }
-    )
-    const loginError = computed(() => {
-        if (!ws.events.value || ws.events.value.length === 0) return null
-        const firstEvent = ws.events.value[ws.events.value.length - 1]
-        if (firstEvent && firstEvent.error) return firstEvent.error
-        return null
-    })
+    }
 </script>
 <template>
     <!-- Conteneur principal qui centre la carte verticalement et horizontalement sur toute la page -->
@@ -39,7 +37,7 @@
                 </h2>
 
                 <!-- Le formulaire -->
-                <form @submit.prevent="login()" class="space-y-4">
+                <form @submit.prevent="handleLogin()" class="space-y-4">
                     
                     <!-- Le conteneur pour le champ de saisie, géré par DaisyUI -->
                     <div class="form-control">
@@ -61,8 +59,8 @@
                 </form>
 
                 <!-- Affichage de l'erreur, stylisé et centré -->
-                <p v-if="loginError" class="text-error text-center text-sm mt-4">
-                    {{ loginError }}
+                <p v-if="login_error" class="text-error text-center text-sm mt-4">
+                    {{ login_error }}
                 </p>
 
             </div>

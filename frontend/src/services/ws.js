@@ -1,5 +1,7 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
+import router from '@/router'
+import { validate_token } from '@/services/login'
 
 const ws = ref(null)
 const myRooms = ref([])
@@ -10,44 +12,60 @@ let store
 function initWebSocket() {
     store = useUserStore()
     const host = window.location.hostname || "localhost"
-    ws.value = new WebSocket(`ws://${host}:5000/ws`)
-    ws.value.onopen = () => {
-        console.log('websocket connected')
-    }
-    ws.value.onmessage = (event) => {
-        const json = JSON.parse(event.data)
-        if (json.action == "receive_message") {
-            messages.value.push({"from_user": json.from_user, "content": json.content})
-        } else if (json.action == "login") {
-            console.log("Logged in")
-            events.value.push({"login": json.content})
+    
+    validate_token(store.token).then(username => {
+        if (!username) {
+            console.error("Token not valid")
+            router.push("/login")
+        }
+        try {
+            ws.value = new WebSocket(`ws://${host}:5000/ws?token=${store.token}`)
+        } catch (error) {
+            console.error(error)
+            events.value.push({"error": error.message})
+            router.push("/login")
+        }
+        ws.value.onopen = () => {
+            console.log('websocket connected')
+        }
+        ws.value.onmessage = (event) => {
+            const json = JSON.parse(event.data)
+            if (json.action == "receive_message") {
+                messages.value.push({"from_user": json.from_user, "content": json.content})
+            } else if (json.action == "login") {
+                console.log("Logged in")
+                events.value.push({"login": json.content})
+            }
+
+            if (json.success===false && json.error) {
+                console.error(json.error)
+                events.value.push({"error": json.error})
+            }
         }
 
-        if (!json.success) {
-            console.error(json.error)
-            events.value.push({"error": json.error})
+        ws.value.onclose = (event) => {
+            console.log("WS closed, reconnecting...")
+            setTimeout(reconnect, 1000)
         }
-    }
-
-    ws.value.onclose = () => {
-        console.log("WS closed, reconnecting...")
-        setTimeout(reconect, 1000)
-    }
+    })
 }
 
-function reconect() {
-    initWebSocket()
-    setTimeout(() => {
-        login(localStorage.getItem("username"))
-        myRooms.value = JSON.parse(localStorage.getItem("rooms"))
-    }, 1000)
-}
-function login(username) {
-    sendJSON({"action": "login", "username": username})
-    localStorage.setItem("username", username)
+function reconnect() {
+    const token = localStorage.getItem("token")
+    const username = localStorage.getItem("username")
+    store = useUserStore()
+    if (token && username) {
+        store.login(username, token)
+        initWebSocket()
+        setTimeout(() => {
+            myRooms.value = JSON.parse(localStorage.getItem("rooms"))
+        }, 1000)
+    } else {
+        console.error("Token or username not found in localStorage")
+        router.push("/login")
+    }
 }
 function joinRoom(room) {
-    console.log(room)
     if (myRooms.value.includes(room)) return
 
     if (ws.value.readyState === WebSocket.OPEN) {
@@ -93,8 +111,7 @@ function sendJSON(payload) {
 
 export default {
     initWebSocket,
-    reconect,
-    login,
+    reconnect,
     joinRoom,
     sendMessage,
     parsedMessages,
