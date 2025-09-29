@@ -15,49 +15,54 @@ const store = useUserStore();
 onMounted(() => {
   setTimeout(() => {
     emit('animation-finished');
-  }, 3200); // 3.2 secondes
+  }, 2200); // 2.2 secondes. il faut aussi modifier .animate-match-container (gere l'anim de sortie) dans le css
 });
 </script>
 
 <template>
-  <!-- Position fixed + inset-0 + z-50 crée l'overlay couvrant tout le viewport, résolvant le problème de l'input -->
+  <!-- Overlay -->
   <div class="fixed h-[100vh] w-[100vw] inset-0 backdrop-blur-sm flex flex-col justify-center items-center z-50 overflow-hidden">
     
     <div class="animate-match-container text-center">
-      <div class="flex items-center justify-around w-full max-w-lg p-4">
+      <!-- Grid 3 colonnes : avatar gauche / VS / avatar droit -->
+      <div class="grid grid-cols-3 items-center w-full max-w-lg p-4 gap-4">
         
-        <!-- Avatar de l'utilisateur -->
-        <div class="flex flex-col items-center gap-4 animate-pop-in-left">
-          <div class="avatar">
-            <div class="w-full h-full rounded-full bg-primary ring-4 ring-primary ring-offset-base-300 ring-offset-4">
+        <!-- Avatar utilisateur -->
+        <div class="flex flex-col items-center gap-4 justify-self-start animate-pop-in-left">
+          <div class="w-28 h-28 rounded-full bg-primary flex items-center justify-center">
+            <div class="w-full h-full rounded-full bg-primary">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-[48px] h-[48px] p-3 text-primary-content">
                 <path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clip-rule="evenodd" />
               </svg>
-            </div>
+          </div>
           </div>
           <span class="text-2xl font-bold text-base-content">{{ store.username }}</span>
         </div>
 
-        <!-- Le "VS" au milieu -->
-        <span class="text-7xl font-black text-secondary-focus animate-vs-pop-in mx-4">VS</span>
+        <!-- VS -->
+        <div class="text-center justify-self-center">
+          <span class="text-7xl font-black text-secondary-focus animate-vs-pop-in">VS</span>
+        </div>
 
-        <!-- Avatar de l'adversaire -->
-        <div class="flex flex-col items-center gap-4 animate-pop-in-right">
-          <div class="avatar">
-            <div class="w-ful h-full rounded-full bg-secondary ring-4 ring-secondary ring-offset-base-300 ring-offset-4">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-[48px] h-[48px] p-3 text-secondary-content">
+        <!-- Avatar adversaire -->
+        <div class="flex flex-col items-center gap-4 justify-self-end animate-pop-in-right">
+          <div class="w-28 h-28 rounded-full bg-secondary flex items-center justify-center">
+           <div class="w-full h-full rounded-full bg-secondary">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-[48px] h-[48px] p-3 text-primary-content">
                 <path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clip-rule="evenodd" />
               </svg>
-            </div>
+          </div>
           </div>
           <span class="text-2xl font-bold text-base-content">{{ props.opponent }}</span>
         </div>
-
       </div>
+
+      <!-- Texte -->
       <h2 class="mt-10 text-5xl font-bold animate-text-glow">Match Found!</h2>
     </div>
   </div>
 </template>
+
 
 <style scoped>
 /* AMÉLIORATION DES ANIMATIONS */
@@ -108,6 +113,6 @@ onMounted(() => {
 }
 
 .animate-match-container {
-  animation: slide-out-and-fade 0.4s 2.8s ease-in forwards;
+  animation: slide-out-and-fade 0.4s 1.8s ease-in forwards;
 }
 </style>

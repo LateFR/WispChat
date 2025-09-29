@@ -16,7 +16,6 @@
   ws.initWebSocket()  
   onMounted(() => {
     setTimeout(async () => {
-      ws.match.value.matched = "waiting"
       if (!await requestMatch()) { // If match request fails, it means token is invalid
         router.push("/login")
       }
