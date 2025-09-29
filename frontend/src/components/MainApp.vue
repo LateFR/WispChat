@@ -1,19 +1,23 @@
 <script setup>
-  import { ref, onMounted, nextTick } from 'vue'
+  import { ref, onMounted, toRef } from 'vue'
   import ws  from '@/services/ws'
   import { useUserStore } from '@/stores/user'
   import router from '@/router'
   import { logout } from '@/services/login'
   import Chat from './Chat.vue'
   import Loading from './Loading.vue'
-import Chat from './Chat.vue'
-
+  import { requestMatch } from '@/services/match'
   const newMessage = ref('')
   const store = useUserStore()
 
+
   ws.initWebSocket()  
   onMounted(() => {
-    setTimeout(() => {ws.joinRoom("room1")}, 1000)
+    setTimeout(async () => {
+      if (!await requestMatch()) { // If match request fails, it means token is invalid
+        router.push("/login")
+      }
+    }, 1000)
   })
   
   
@@ -68,7 +72,8 @@ import Chat from './Chat.vue'
         </div>
       </div>
       
-      <Chat />
+      <Chat v-if="ws.match.value.matched" />
+      <loading v-else message="Waiting for match..." color="primary" type="dots" />
       
       <!-- Zone de saisie -->
       <div class="p-4 bg-base-100 border-t border-base-300">

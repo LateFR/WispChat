@@ -7,7 +7,10 @@ const ws = ref(null)
 const myRooms = ref([])
 const messages = ref([])
 const events = ref([])
+const match = ref({"matched": false, "user": null})
+
 let store
+
 // init websocket
 function initWebSocket() {
     store = useUserStore()
@@ -38,8 +41,9 @@ function initWebSocket() {
             } else if (json.action == "login") {
                 console.log("Logged in")
                 events.value.push({"login": json.content})
+            } else if (json.action == "matched") {
+                whenMatched(json.content.room, json.content.username)
             }
-
             if (json.success===false && json.error) {
                 console.error(json.error)
                 events.value.push({"error": json.error})
@@ -76,12 +80,18 @@ function joinRoom(room) {
         sendJSON({"action": "join", "room": room})
         myRooms.value.push(room)
         console.log("Connected to " + room)
-
+        store.joinRoom(room)
         localStorage.setItem("rooms", JSON.stringify(myRooms.value))
     } else {
         console.error("Connection to websocket not opened")
     }
 }
+
+function whenMatched(room, username) {
+    joinRoom(room)
+    match.value = {"matched": true, "user": username}
+}
+
 function sendMessage(message) {
     if (myRooms.value.length === 0){
         joinRoom("room1")
@@ -120,5 +130,7 @@ export default {
     joinRoom,
     sendMessage,
     parsedMessages,
-    events
+    whenMatched,
+    events,
+    match,
 }

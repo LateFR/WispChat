@@ -12,7 +12,7 @@ class MatchMaker():
     def find_match(self):
         players = list(self.waiting_players.keys()) 
         if len(self.waiting_players) >= 2:
-            player1 = self.waiting_players.pop(0)
-            player2 = self.waiting_players.pop(0)
+            player1 = self.waiting_players.pop(players[0])
+            player2 = self.waiting_players.pop(players[1])
             return (player1, player2)
         return None

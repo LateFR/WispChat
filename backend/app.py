@@ -4,7 +4,7 @@ import time
 import jwt
 import os
 from datetime import datetime, timedelta, UTC
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
 from matchmacker import MatchMaker
 from threading import Thread
@@ -54,21 +54,22 @@ async def matchmaking_loop():
     while True:
         match = match_maker.find_match()
         if match:
-            player1, player2 = match
+            player1info, player2info = match
+            player1,player2 = player1info["username"], player2info["username"]
             try: 
                 user1 = connections[player1]
                 user2 = connections[player2]
             except KeyError:
                 if player1 in connections:
-                    match_maker.add_player(player1, {})
+                    match_maker.add_player(player1, player1info)
                 if player2 in connections:
-                    match_maker.add_player(player2, {})
+                    match_maker.add_player(player2, player2info)
                 continue
             if not user1.active or not user2.active:
                 if user1.active:
-                    match_maker.add_player(player1, {})
+                    match_maker.add_player(player1, player1info)
                 if user2.active:
-                    match_maker.add_player(player2, {})
+                    match_maker.add_player(player2, player2info)
                 continue
             print(f"Match found: {player1} vs {player2}")
             room_id = str(uuid.uuid4())
@@ -84,7 +85,7 @@ async def read_root():
 async def get_token(username: str):
     users = connections.keys()
     if username in users:
-        return Response(status_code=403, content=f"Username {username} already exists")
+        return Response(status_code=409, content=f"Username {username} already exists")
     expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
     payload = {"sub": username, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -97,7 +98,7 @@ async def validate_token(token: str):
     if username:
         return Response(status_code=200, content=username)
     else:
-        return Response(status_code=400, content="Invalid token")
+        return Response(status_code=401, content="Invalid token")
 
 @app.get("/token/logout")
 async def logout(token: str):
@@ -110,16 +111,19 @@ async def logout(token: str):
         return Response(status_code=400, content="Invalid token")
     
 @app.post("/matchmaking/join")
-async def join_matchmaking(token: str):
+async def join_matchmaking(request: Request):
+    token = request.headers.get("Authorization", None)
+    if not token:
+        return Response(status_code=401, content="Invalid token")
     username = verify_token(token)
     if not username:
-        return Response(status_code=403, content="Invalid token")
+        return Response(status_code=401, content="Invalid token")
     
     if username in connections:
-        match_maker.add_player(username, {})
+        match_maker.add_player(username, {"username": username})
         return Response(status_code=200, content="Joined matchmaking")
     else:
-        return Response(status_code=403, content="Invalid token")
+        return Response(status_code=403, content="Need login first")
     
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
