@@ -146,6 +146,8 @@ async def ws_endpoint(ws: WebSocket):
                 action = content["action"]
                 if action == "join": # {"action": "join", "room": "room_name"}
                     await user.join_room(content)
+                elif action == "leave_room": # {"action": "leave_room", "room": "room_name"}
+                    await user.leave_room(content)
                 elif action == "send": # {"action": "send", "room": "room_name", "message": "message"}
                     await user.send_message(content)
                 # traitement ici
@@ -196,6 +198,13 @@ class User():
             rooms[room_name].remove(self.username)
         if verbose:
             await self.send_response(f"Left room {room_name}", "leave_room")
+        
+        if len(list(rooms[room_name].copy())) == 0:
+            rooms.pop(room_name)
+            return
+        
+        for username in list(rooms[room_name].copy()):
+            await connections[username].send_response(self.username, "user_left")
         
     async def send_message(self, content: dict):
         room_name = content["room"]

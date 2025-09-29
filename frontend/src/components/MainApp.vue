@@ -1,5 +1,5 @@
 <script setup>
-  import { ref, onMounted, toRef } from 'vue'
+  import { ref, onMounted, watch } from 'vue'
   import ws  from '@/services/ws'
   import { useUserStore } from '@/stores/user'
   import router from '@/router'
@@ -7,6 +7,8 @@
   import Chat from './Chat.vue'
   import Loading from './Loading.vue'
   import { requestMatch } from '@/services/match'
+  import MatchAnimation from './MatchAnimation.vue'
+
   const newMessage = ref('')
   const store = useUserStore()
 
@@ -14,6 +16,7 @@
   ws.initWebSocket()  
   onMounted(() => {
     setTimeout(async () => {
+      ws.match.value.matched = "waiting"
       if (!await requestMatch()) { // If match request fails, it means token is invalid
         router.push("/login")
       }
@@ -37,15 +40,38 @@
       }
     })
   }
+
+  function showChat() {
+    ws.match.value.matched = "stable"
+  }
+
+  watch(() => ws.match.value.matched, (newValue, oldValue) => {
+    if (newValue === "matched" && oldValue === "waiting") {
+      console.log("Transitioning to animating")
+      ws.match.value.matched = "animating"
+    }
+    if (newValue === "waiting" && oldValue !== "waiting") {
+      newMessage.value = ""
+      ws.match.value.user = ""
+      ws.leaveRoom(store.rooms[0]) // leave the current room
+      ws.match.value.room = null
+      setTimeout(async () => {
+        if (!await requestMatch()) { // If match request fails, it means token is invalid
+          router.push("/login")
+        }
+      }, 1)
+    }
+  })
 </script>
 
 <template>
   <div class="bg-base-200 min-h-screen flex justify-center p-0 sm-p-4">
+    <!-- Le conteneur `relative` est important pour que MatchAnimation puisse se positionner par-dessus -->
     <div class="flex flex-col h-screen w-full max-w-4xl bg-base-100 shadow-xl relative">
 
       <div class="navbar bg-base-100 border-b border-base-300">
         <div class="flex-1">
-          <a class="btn btn-ghost text-xl">Chat room: room1</a>
+          <button @click="ws.match.value.matched = 'waiting'" class="btn btn-ghost text-xl">Chat avec: {{ ws.match.value.user || '...' }}</button>
         </div>
         <div class="flex-none">
           <div class="dropdown dropdown-end">
@@ -72,8 +98,17 @@
         </div>
       </div>
       
-      <Chat v-if="ws.match.value.matched" />
-      <loading v-else message="Waiting for match..." color="primary" type="dots" />
+      <!-- Affichage du Chat ou du Loading. Le Chat reste affiché pendant l'animation. -->
+      <Chat v-if="ws.match.value.matched !== 'waiting'" />
+      <Loading v-if="ws.match.value.matched === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
+      
+      <!-- L'animation en tant que véritable overlay (positionné par-dessus le chat) -->
+      <MatchAnimation 
+        v-if="ws.match.value.matched === 'animating'"
+        :opponent="ws.match.value.user" 
+        @animation-finished="showChat"
+        class="absolute inset-0 flex justify-center items-center z-50"
+      />
       
       <!-- Zone de saisie -->
       <div class="p-4 bg-base-100 border-t border-base-300">
@@ -83,11 +118,12 @@
             type="text" 
             placeholder="Tapez votre message..." 
             class="input input-bordered w-full focus:outline-none focus:ring-2 focus:ring-primary"
+            :disabled="ws.match.value.matched !== 'stable'"
           />
           <button 
             type="submit" 
             class="btn btn-primary btn-square"
-            :disabled="!newMessage.trim()"
+            :disabled="!newMessage.trim() || ws.match.value.matched !== 'stable'"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

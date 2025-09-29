@@ -19,6 +19,10 @@ export const useUserStore = defineStore("user", {
             if (this.rooms.includes(room)) return
             this.rooms.push(room)
         },
+        leaveRoom(room) {
+            if (!this.rooms.includes(room)) return
+            this.rooms = this.rooms.filter(r => r !== room)
+        },
         logout() {
             this.username = null
             this.loggedIn = false

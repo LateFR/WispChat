@@ -7,7 +7,7 @@ const ws = ref(null)
 const myRooms = ref([])
 const messages = ref([])
 const events = ref([])
-const match = ref({"matched": false, "user": null})
+const match = ref({"matched": "waiting", "user": null})  // "waiting", "matched", "animating",  "stable"
 
 let store
 
@@ -43,7 +43,11 @@ function initWebSocket() {
                 events.value.push({"login": json.content})
             } else if (json.action == "matched") {
                 whenMatched(json.content.room, json.content.username)
+            } else if (json.action == "user_left") {
+                console.log(`${json.content.username} left the room`)
+                match.value.matched = "waiting"
             }
+
             if (json.success===false && json.error) {
                 console.error(json.error)
                 events.value.push({"error": json.error})
@@ -68,6 +72,10 @@ function reconnect() {
         setTimeout(() => {
             myRooms.value = JSON.parse(localStorage.getItem("rooms"))
         }, 1000)
+        for (const room of store.rooms) {
+            joinRoom(room)
+        }
+        console.log("Reconnected")
     } else {
         console.error("Token or username not found in localStorage")
         router.push("/login")
@@ -87,9 +95,23 @@ function joinRoom(room) {
     }
 }
 
+function leaveRoom(room) {
+    if (!myRooms.value.includes(room)) return
+
+    if (ws.value.readyState === WebSocket.OPEN) {
+        sendJSON({"action": "leave_room", "room": room})
+        myRooms.value = myRooms.value.filter(r => r !== room)
+        console.log("Left " + room)
+        store.leaveRoom(room)
+        localStorage.setItem("rooms", JSON.stringify(myRooms.value))
+        messages.value = []
+    } else {
+        console.error("Connection to websocket not opened")
+    }
+}
 function whenMatched(room, username) {
     joinRoom(room)
-    match.value = {"matched": true, "user": username}
+    match.value = {"matched": "matched", "user": username}
 }
 
 function sendMessage(message) {
@@ -131,6 +153,7 @@ export default {
     sendMessage,
     parsedMessages,
     whenMatched,
+    leaveRoom,
     events,
     match,
 }
