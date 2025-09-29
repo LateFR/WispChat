@@ -1,57 +1,56 @@
 <script setup>
-  import { ref, onMounted } from 'vue'
-  import ws  from '@/services/ws'
-  import { useUserStore } from '@/stores/user'
-  import router from '@/router'
-  import { logout } from '@/services/login'
-  const newMessage = ref('')
-  const store = useUserStore()
+    import { ref, nextTick, watch } from 'vue'
+    import ws  from '@/services/ws'
+    import { useUserStore } from '@/stores/user'
+    
+    const messagesContainer = ref(null)
+    const isUserAtBottom = ref(true)
+    const hasNewMessage = ref(false)
+    const store = useUserStore()
 
-  ws.initWebSocket()  
-  onMounted(() => {setTimeout(() => {ws.joinRoom("room1")}, 1000)})
-  
-  function handleLogout() {
-    logout(store.token).then(response => {
-      if (response) {
-        store.logout()
-        router.push("/login")
-      }
+    // Surveiller les nouveaux messages
+    watch(() => ws.parsedMessages().length, async (newLength, oldLength) => {
+        if (newLength > oldLength) {
+        // Vérifier si l'utilisateur était déjà en bas avant le nouveau message
+        if (isUserAtBottom.value) {
+            await nextTick()
+            scrollToBottom()
+        } else {
+            // Afficher l'indicateur de nouveau message
+            hasNewMessage.value = true
+        }
+        }
     })
-  }
+    
+    // Fonction pour vérifier si l'utilisateur est en bas du scroll
+    function checkIfAtBottom() {
+        if (messagesContainer.value) {
+        const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
+        isUserAtBottom.value = Math.abs(scrollHeight - clientHeight - scrollTop) < 10
+        
+        // Si on est en bas et qu'il y avait un nouveau message, on le masque
+        if (isUserAtBottom.value && hasNewMessage.value) {
+            hasNewMessage.value = false
+        }
+        }
+    }
+    
+    // Fonction pour scroller jusqu'en bas
+    function scrollToBottom() {
+        if (messagesContainer.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        hasNewMessage.value = false
+        }
+    }
 </script>
-
 <template>
-  <div class="bg-base-200 min-h-screen flex justify-center p-0 sm:p-4">
-    <div class="flex flex-col h-screen w-full max-w-4xl bg-base-100 shadow-xl">
 
-      <div class="navbar bg-base-100 border-b border-base-300">
-        <div class="flex-1">
-          <a class="btn btn-ghost text-xl">Chat room: room1</a>
-        </div>
-        <div class="flex-none">
-          <div class="dropdown dropdown-end">
-            <label tabindex="0" class="btn btn-ghost btn-circle avatar">
-              <div class="w-10 rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-full h-full p-1.5 text-base-content/40">
-                  <path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clip-rule="evenodd" />
-                </svg>
-              </div>
-            </label>
-            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-200 rounded-box w-52">
-              <li class="p-2 font-semibold pointer-events-none">
-                <span>{{ store.username }}</span>
-              </li>
-              <li>
-                <button @click="handleLogout()" class="flex items-center text-error">
-                  Logout
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      
-      <ul class="flex-1 p-4 overflow-y-auto space-y-4">
+      <!-- Conteneur des messages avec ref et scroll listener -->
+      <ul 
+        ref="messagesContainer"
+        @scroll="checkIfAtBottom"
+        class="flex-1 p-4 overflow-y-auto relative"
+      >
         <li v-if="ws.parsedMessages().length === 0" class="text-center text-base-content/50">
           No messages yet. Be the first!
         </li>
@@ -59,22 +58,42 @@
         <li
           v-for="(message, index) in ws.parsedMessages()"
           :key="index"
-          class="chat"
+          class="chat items-end"
           :class="{
             'chat-end': message.from === store.username, 
-            'chat-start': message.from !== store.username
+            'chat-start': message.from !== store.username,
+            // Espacement uniquement entre groupes de messages d'utilisateurs différents
+            'mt-3': index > 0 && message.from !== ws.parsedMessages()[index - 1].from,
+            // Messages consécutifs du même utilisateur sont collés
+            'mt-0.5': index > 0 && message.from === ws.parsedMessages()[index - 1].from
           }"
         >
-          <div class="chat-image avatar" v-if="message.from !== store.username">
-            <div class="w-10 h-10 rounded-full bg-base-300 flex items-center justify-center">
-               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-base-content/60">
+          <!-- Avatar avec visibilité conditionnelle basée sur le message précédent -->
+          <div 
+            class="chat-image"
+            :class="{
+              'invisible': message.from === store.username || (index > 0 && message.from === ws.parsedMessages()[index - 1].from),
+              'visible': message.from !== store.username && (index === 0 || message.from !== ws.parsedMessages()[index - 1].from)
+            }"
+          >
+            <div class="avatar online">
+              <div class="rounded-full bg-base-300 flex items-center justify-center w-12 h-12">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="p-1.5 text-base-content/40">
                   <path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clip-rule="evenodd" />
-                </svg>
+                </svg> 
+              </div>
             </div>
           </div>
-          <div class="chat-header text-xs opacity-70 mb-1">
+          
+          <!-- Header avec le nom, affiché seulement pour le premier message d'un groupe -->
+          <div 
+            class="chat-header text-xs opacity-70 mb-1" 
+            v-if="index === 0 || message.from !== ws.parsedMessages()[index - 1].from"
+          >
             {{ message.from }}
           </div>
+          
+          <!-- Bulle de message -->
           <div 
             class="chat-bubble break-words whitespace-pre-wrap"
             :class="{'chat-bubble-primary': message.from === store.username}"
@@ -84,22 +103,37 @@
         </li>
       </ul>
 
-      <div class="p-4 bg-base-100 border-t border-base-300">
-        <form @submit.prevent="ws.sendMessage(newMessage); newMessage = ''" class="flex gap-3">
-          <input 
-            v-model="newMessage" 
-            type="text" 
-            placeholder="Tapez votre message..." 
-            class="input input-bordered w-full focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <button type="submit" class="btn btn-primary btn-square">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-            </svg>
-          </button>
-        </form>
-      </div>
-    </div>
+      <!-- Indicateur de nouveau message -->
+      <transition name="slide-up">
+        <div 
+          v-if="hasNewMessage && !isUserAtBottom"
+          @click="scrollToBottom"
+          class="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-primary text-primary-content px-4 py-2 rounded-full shadow-lg cursor-pointer hover:bg-primary-focus transition-colors flex items-center gap-2 z-10"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+          <span class="text-sm font-medium">Nouveau message</span>
+        </div>
+      </transition>
 
-  </div>
 </template>
+
+
+<style scoped>
+/* Animation pour l'indicateur de nouveau message */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from {
+  transform: translate(-50%, 20px);
+  opacity: 0;
+}
+
+.slide-up-leave-to {
+  transform: translate(-50%, 20px);
+  opacity: 0;
+}
+</style>

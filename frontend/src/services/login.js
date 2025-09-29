@@ -40,6 +40,8 @@ export async function validate_token(token) {
 }
 
 export async function logout(token) {
+    localStorage.removeItem("username")
+    localStorage.removeItem("token")
     const response = await fetch("http://192.168.1.49:5000/token/logout?token=" + token, {
         method: "GET"
     })
@@ -52,7 +54,22 @@ export async function logout(token) {
     }
 }
 
+async function can_reconnect() {
+    const token = localStorage.getItem("token")
+    if (token) {
+        const username = await validate_token(token)
+        if (username) {
+            localStorage.setItem("username", username)
+            return true
+        } else {
+            return false
+        }
+    } else {
+        return false
+    }
+}
 export default {
     get_and_process_token,
-    validate_token
+    validate_token,
+    can_reconnect
 }

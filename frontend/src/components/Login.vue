@@ -1,31 +1,43 @@
 <script setup>
     import { useUserStore } from '@/stores/user';
-    import { ref, computed, watch } from 'vue'
+    import { ref, onMounted } from 'vue'
     import login from '@/services/login'
     import router from '@/router';
+    import ws from '@/services/ws'
+
+    const ready = ref(false)
     const store = useUserStore()
     const username = ref("")
     const login_error = ref("")
+
+    onMounted(async () => {
+        const isReconnectable = await login.can_reconnect()
+        if (isReconnectable) {
+            ws.reconnect()
+            router.push("/") // redirige après reconnexion
+        } else {
+            ready.value = true
+        }
+    })
+
+   
     function handleLogin() {
         if (!username.value) return
-        try {
-            login.get_and_process_token(username.value).then(token => {
-                if (!token) return
-                store.login(username.value, token)
-                username.value = ""
-                console.log("Logged in")
-                router.push("/")
-            })
-        } catch (error) {
-            console.error(error)
+        login.get_and_process_token(username.value).then(token => {
+            if (!token) return
+            store.login(username.value, token)
+            username.value = ""
+            console.log("Logged in")
+            router.push("/")
+        }).catch (error => {
             login_error.value = error.message
             return
-        }
+        })
     }
 </script>
 <template>
     <!-- Conteneur principal qui centre la carte verticalement et horizontalement sur toute la page -->
-    <div class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+    <div v-if="ready" class="min-h-screen bg-base-200 flex items-center justify-center p-4">
 
         <!-- La carte de connexion -->
         <div class="card w-full max-w-[500px] bg-base-100 shadow-xl">

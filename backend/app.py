@@ -1,11 +1,15 @@
+import asyncio
 import json
+import time
 import jwt
 import os
 from datetime import datetime, timedelta, UTC
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
+from matchmacker import MatchMaker
+from threading import Thread
+import uuid
 
-app = FastAPI()
 SECRET_KEY = os.environ.get("SECRET_KEY", "secret123")
 if SECRET_KEY == "secret123":
     print("WARNING: SECRET_KEY is set to the default value. Please change it in production.")
@@ -14,13 +18,9 @@ EXPIRE_MINUTES = int(os.environ.get("EXPIRE_MINUTES", 60))
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
 rooms = {} # {room_name: set(usernames)}
 origins = ["http://localhost:5173", "http://192.168.1.49:5173"]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+match_maker = MatchMaker()
+
 
 def verify_token(token: str):
     try:
@@ -34,12 +34,54 @@ def verify_token(token: str):
     except jwt.InvalidTokenError:
         return None
     
+async def lifespan(app: FastAPI):
+    asyncio.create_task(matchmaking_loop())
+    yield
+    # shutdown code here
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+async def matchmaking_loop():
+    global match_maker, connections
+    while True:
+        match = match_maker.find_match()
+        if match:
+            player1, player2 = match
+            try: 
+                user1 = connections[player1]
+                user2 = connections[player2]
+            except KeyError:
+                if player1 in connections:
+                    match_maker.add_player(player1, {})
+                if player2 in connections:
+                    match_maker.add_player(player2, {})
+                continue
+            if not user1.active or not user2.active:
+                if user1.active:
+                    match_maker.add_player(player1, {})
+                if user2.active:
+                    match_maker.add_player(player2, {})
+                continue
+            print(f"Match found: {player1} vs {player2}")
+            room_id = str(uuid.uuid4())
+            await user1.send_response({"room": room_id, "username": player2}, "matched")
+            await user2.send_response({"room": room_id, "username": player1}, "matched")
+        await asyncio.sleep(0.1)
+
 @app.get("/")
-def read_root():
+async def read_root():
     return "I work!"
 
 @app.get("/token")
-def get_token(username: str):
+async def get_token(username: str):
     users = connections.keys()
     if username in users:
         return Response(status_code=403, content=f"Username {username} already exists")
@@ -50,13 +92,13 @@ def get_token(username: str):
     return {"token": token}
 
 @app.get("/token/validate")
-def validate_token(token: str):
+async def validate_token(token: str):
     username = verify_token(token)
     if username:
         return Response(status_code=200, content=username)
     else:
         return Response(status_code=400, content="Invalid token")
-    
+
 @app.get("/token/logout")
 async def logout(token: str):
     username = verify_token(token)
@@ -66,6 +108,19 @@ async def logout(token: str):
         return Response(status_code=200, content="Logged out")
     else:
         return Response(status_code=400, content="Invalid token")
+    
+@app.post("/matchmaking/join")
+async def join_matchmaking(token: str):
+    username = verify_token(token)
+    if not username:
+        return Response(status_code=403, content="Invalid token")
+    
+    if username in connections:
+        match_maker.add_player(username, {})
+        return Response(status_code=200, content="Joined matchmaking")
+    else:
+        return Response(status_code=403, content="Invalid token")
+    
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
@@ -102,11 +157,14 @@ class User():
         self.username = username
         self.my_rooms = []
         self.ws = ws
+        self.active = True
         
         connections[username] = self
     
     async def logout(self):
     # Supprimer l'utilisateur des connexions et des rooms d'abord
+        self.active = False
+        
         if self.username in connections:
             connections.pop(self.username)
         
@@ -134,6 +192,7 @@ class User():
             rooms[room_name].remove(self.username)
         if verbose:
             await self.send_response(f"Left room {room_name}", "leave_room")
+        
     async def send_message(self, content: dict):
         room_name = content["room"]
         message = content["message"]
@@ -149,6 +208,7 @@ class User():
     async def broadcast_room(self, room_name: str, content: str):
         for username in rooms[room_name]:
             await connections[username].relay_message(self.username, room_name, content)
+            
     async def send_response(self, content:str, action: str):
         try:
             await self.ws.send_json({"action": action, "success": True, "error": "", "content": content})
@@ -170,4 +230,5 @@ class User():
             await self.logout()
 if __name__ == "__main__":
     import uvicorn
+    
     uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)

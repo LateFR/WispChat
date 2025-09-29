@@ -16,7 +16,10 @@ function initWebSocket() {
     validate_token(store.token).then(username => {
         if (!username) {
             console.error("Token not valid")
-            router.push("/login")
+            if (router.currentRoute.value.path !== "/login") {
+                router.push("/login")
+            }
+            return
         }
         try {
             ws.value = new WebSocket(`ws://${host}:5000/ws?token=${store.token}`)
