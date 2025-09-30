@@ -13,13 +13,14 @@
   const store = useUserStore()
 
 
-  ws.initWebSocket()  
   onMounted(() => {
-    setTimeout(async () => {
+    ws.initWebSocket(async () => {
+      // Ici on est sûr que le WS est connecté
       if (!await requestMatch()) { // If match request fails, it means token is invalid
-        router.push("/login")
+        handleLogout()
       }
-    }, 1000)
+      ws.match.value.matched = "waiting" // match can be on "stable" if the user comme logout
+    })
   })
   
   
@@ -35,6 +36,7 @@
     logout(store.token).then(response => {
       if (response) {
         store.logout()
+        ws.messages.value = []
         router.push("/login")
       }
     })

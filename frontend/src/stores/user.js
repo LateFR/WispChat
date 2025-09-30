@@ -26,6 +26,10 @@ export const useUserStore = defineStore("user", {
         logout() {
             this.username = null
             this.loggedIn = false
+            this.token = null
+            this.rooms = []
+            localStorage.removeItem("username")
+            localStorage.removeItem("token")
         }
     }
 })

@@ -12,7 +12,7 @@ const match = ref({"matched": "waiting", "user": null})  // "waiting", "matched"
 let store
 
 // init websocket
-function initWebSocket() {
+function initWebSocket(onOpenCallback=null) {
     store = useUserStore()
     const host = window.location.hostname || "localhost"
     
@@ -33,6 +33,7 @@ function initWebSocket() {
         }
         ws.value.onopen = () => {
             console.log('websocket connected')
+            if (onOpenCallback) onOpenCallback()
         }
         ws.value.onmessage = (event) => {
             const json = JSON.parse(event.data)
@@ -156,4 +157,5 @@ export default {
     leaveRoom,
     events,
     match,
+    messages
 }
