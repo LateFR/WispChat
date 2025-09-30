@@ -1,3 +1,7 @@
+import ws from '@/services/ws'
+import { useUserStore } from '@/stores/user'
+import router from '@/router'
+
 function get_token(username) {
     return fetch(`http://192.168.1.49:5000/token?username=` + username, {
         method: "GET"
@@ -68,6 +72,18 @@ async function can_reconnect() {
         return false
     }
 }
+
+export function handleLogout() {
+    const store = useUserStore()
+    logout(store.token).then(response => {
+      if (response) {
+        store.logout()
+        ws.messages.value = []
+        router.push("/login")
+      }
+    })
+  }
+
 export default {
     get_and_process_token,
     validate_token,
