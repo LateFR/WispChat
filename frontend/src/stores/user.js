@@ -41,6 +41,7 @@ export const useUserStore = defineStore("user", {
             this.loggedIn = false
             this.token = null
             this.rooms = []
+            this.setupInfo = null
             localStorage.removeItem("username")
             localStorage.removeItem("token")
             localStorage.removeItem("setupInfo")
