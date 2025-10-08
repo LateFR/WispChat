@@ -9,7 +9,6 @@
   import { requestMatch } from '@/services/match'
   import MatchAnimation from './MatchAnimation.vue'
   import Header from './Header.vue'
-
   const newMessage = ref('')
   const store = useUserStore()
 
@@ -20,7 +19,7 @@
       if (!await requestMatch()) { // If match request fails, it means token is invalid
         handleLogout()
       }
-      ws.match.value.matched = "waiting" // match can be on "stable" if the user comme logout
+      ws.match.value.matched = "waiting"
     })
   })
   
@@ -45,7 +44,7 @@
     }
     if (newValue === "waiting" && oldValue !== "waiting") {
       newMessage.value = ""
-      ws.match.value.user = ""
+      ws.match.value.opponent = {"username": null, "gender": null}
       ws.leaveRoom(store.rooms[0]) // leave the current room
       ws.match.value.room = null
       setTimeout(async () => {
@@ -62,7 +61,7 @@
     <!-- Le conteneur `relative` est important pour que MatchAnimation puisse se positionner par-dessus -->
     <div class="flex flex-col h-screen w-full max-w-4xl bg-base-100 shadow-xl relative">
       <Header />
-      
+
       <!-- Affichage du Chat ou du Loading. Le Chat reste affiché pendant l'animation. -->
       <Chat v-if="ws.match.value.matched !== 'waiting'" />
       <Loading v-if="ws.match.value.matched === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
@@ -70,7 +69,7 @@
       <!-- L'animation en tant que véritable overlay (positionné par-dessus le chat) -->
       <MatchAnimation 
         v-if="ws.match.value.matched === 'animating'"
-        :opponent="ws.match.value.user" 
+        :opponent="ws.match.value.opponent" 
         @animation-finished="showChat"
         class="absolute inset-0 flex justify-center items-center z-50"
       />

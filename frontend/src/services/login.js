@@ -84,6 +84,41 @@ export function handleLogout() {
     })
   }
 
+export async function sendSetupInfo(age, gender, interests) {
+    const store = useUserStore()
+    const response = await fetch("http://192.168.1.49:5000/setup/info", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": store.token,
+        },
+        body: JSON.stringify({"age": age, "gender": gender, "interests": interests}),
+    })
+    if (response.status === 200) {
+        store.setSetupInfo(age, gender, interests)
+        return true
+    } else {
+        return false
+    }
+}
+
+export async function tryReSetup(){
+    const store = useUserStore()
+    if (store.setupInfo) {
+        const age = store.setupInfo.age
+        const gender = store.setupInfo.gender
+        const interests = store.setupInfo.interests
+        if (age && gender && interests) {
+            const success = await sendSetupInfo(age, gender, interests)
+            if (success) {
+                return true
+            } else {
+                return false
+            }
+        }
+    }
+    return false
+}
 export default {
     get_and_process_token,
     validate_token,

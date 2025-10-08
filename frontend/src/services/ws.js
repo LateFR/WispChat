@@ -1,13 +1,13 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
-import { validate_token } from '@/services/login'
+import { validate_token, tryReSetup } from '@/services/login'
 
 const ws = ref(null)
 const myRooms = ref([])
 const messages = ref([])
 const events = ref([])
-const match = ref({"matched": "waiting", "user": null})  // "waiting", "matched", "animating",  "stable"
+const match = ref({"matched": "waiting", "opponent": {"username": null, "gender": null}})  //"waiting", "matched", "animating",  "stable"
 
 let store
 
@@ -18,47 +18,58 @@ function initWebSocket(onOpenCallback=null) {
     
     validate_token(store.token).then(username => {
         if (!username) {
-            console.error("Token not valid")
-            if (router.currentRoute.value.path !== "/login") {
+                console.error("Token not valid")
+                if (router.currentRoute.value.path !== "/login") {
+                    router.push("/login")
+                }
+                return
+            }
+
+        tryReSetup().then(success => {
+            if (!success) {
+                console.error("Setup info not valid")
+                if (router.currentRoute.value.path !== "/setup") {
+                    router.push("/setup")
+                }
+                return
+            }
+            
+            try {
+                ws.value = new WebSocket(`ws://${host}:5000/ws?token=${store.token}`)
+            } catch (error) {
+                console.error(error)
+                events.value.push({"error": error.message})
                 router.push("/login")
             }
-            return
-        }
-        try {
-            ws.value = new WebSocket(`ws://${host}:5000/ws?token=${store.token}`)
-        } catch (error) {
-            console.error(error)
-            events.value.push({"error": error.message})
-            router.push("/login")
-        }
-        ws.value.onopen = () => {
-            console.log('websocket connected')
-            if (onOpenCallback) onOpenCallback()
-        }
-        ws.value.onmessage = (event) => {
-            const json = JSON.parse(event.data)
-            if (json.action == "receive_message") {
-                messages.value.push({"from_user": json.from_user, "content": json.content})
-            } else if (json.action == "login") {
-                console.log("Logged in")
-                events.value.push({"login": json.content})
-            } else if (json.action == "matched") {
-                whenMatched(json.content.room, json.content.username)
-            } else if (json.action == "user_left") {
-                console.log(`${json.content.username} left the room`)
-                match.value.matched = "waiting"
+            ws.value.onopen = () => {
+                console.log('websocket connected')
+                if (onOpenCallback) onOpenCallback()
+            }
+            ws.value.onmessage = (event) => {
+                const json = JSON.parse(event.data)
+                if (json.action == "receive_message") {
+                    messages.value.push({"from_user": json.from_user, "content": json.content})
+                } else if (json.action == "login") {
+                    console.log("Logged in")
+                    events.value.push({"login": json.content})
+                } else if (json.action == "matched") {
+                    whenMatched(json.content.room, json.content.user)
+                } else if (json.action == "user_left") {
+                    console.log(`${json.content.username} left the room`)
+                    match.value.matched = "waiting"
+                }
+
+                if (json.success===false && json.error) {
+                    console.error(json.error)
+                    events.value.push({"error": json.error})
+                }
             }
 
-            if (json.success===false && json.error) {
-                console.error(json.error)
-                events.value.push({"error": json.error})
+            ws.value.onclose = (event) => {
+                console.log("WS closed, reconnecting...")
+                setTimeout(reconnect, 1000)
             }
-        }
-
-        ws.value.onclose = (event) => {
-            console.log("WS closed, reconnecting...")
-            setTimeout(reconnect, 1000)
-        }
+        })
     })
 }
 
@@ -110,9 +121,9 @@ function leaveRoom(room) {
         console.error("Connection to websocket not opened")
     }
 }
-function whenMatched(room, username) {
+function whenMatched(room, user) {
     joinRoom(room)
-    match.value = {"matched": "matched", "user": username}
+    match.value = {"matched": "matched", "opponent": {"username": user.username, "gender": user.gender}}
 }
 
 function sendMessage(message) {

@@ -5,7 +5,15 @@ export const useUserStore = defineStore("user", {
         username:localStorage.getItem("username") || null,
         loggedIn: localStorage.getItem("username") !== null,
         token:localStorage.getItem("token") || null,
-        rooms: []
+        rooms: [],
+        setupInfo: (() => {
+            try {
+                return JSON.parse(localStorage.getItem("setupInfo")) || null
+            } catch (e) {
+                console.warn("Erreur parsing setupInfo:", e)
+                return null
+            }
+        })()
     }),
     actions: {
         login(username, token) {
@@ -23,6 +31,11 @@ export const useUserStore = defineStore("user", {
             if (!this.rooms.includes(room)) return
             this.rooms = this.rooms.filter(r => r !== room)
         },
+        setSetupInfo(age, gender, interests) {
+            const setupInfo = {"age": age, "gender": gender, "interests": interests}
+            this.setupInfo = setupInfo
+            localStorage.setItem("setupInfo", JSON.stringify(setupInfo))
+        },
         logout() {
             this.username = null
             this.loggedIn = false
@@ -30,6 +43,7 @@ export const useUserStore = defineStore("user", {
             this.rooms = []
             localStorage.removeItem("username")
             localStorage.removeItem("token")
+            localStorage.removeItem("setupInfo")
         }
     }
 })

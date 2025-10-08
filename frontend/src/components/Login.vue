@@ -14,7 +14,7 @@
         const isReconnectable = await login.can_reconnect()
         if (isReconnectable) {
             ws.reconnect()
-            router.push("/") // redirige après reconnexion
+            router.push("/setup") // redirige après reconnexion
         } else {
             ready.value = true
         }
@@ -28,7 +28,7 @@
             store.login(username.value, token)
             username.value = ""
             console.log("Logged in")
-            router.push("/")
+            router.push("/setup")
         }).catch (error => {
             login_error.value = error.message
             return

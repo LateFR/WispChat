@@ -1,6 +1,6 @@
 import asyncio
 import json
-import time
+from fastapi.websockets import WebSocketState
 import jwt
 import os
 from datetime import datetime, timedelta, UTC
@@ -18,6 +18,7 @@ EXPIRE_MINUTES = int(os.environ.get("EXPIRE_MINUTES", 60))
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
 rooms = {} # {room_name: set(usernames)}
 origins = ["http://localhost:5173", "http://192.168.1.49:5173"]
+temp_data_setup = {}
 
 match_maker = MatchMaker()
 
@@ -61,20 +62,20 @@ async def matchmaking_loop():
                 user2 = connections[player2]
             except KeyError:
                 if player1 in connections:
-                    match_maker.add_player(player1, player1info)
+                    match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"])
                 if player2 in connections:
-                    match_maker.add_player(player2, player2info)
+                    match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"])
                 continue
             if not user1.active or not user2.active:
                 if user1.active:
-                    match_maker.add_player(player1, player1info)
+                    match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"])
                 if user2.active:
-                    match_maker.add_player(player2, player2info)
+                    match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"])
                 continue
             print(f"Match found: {player1} vs {player2}")
             room_id = str(uuid.uuid4())
-            await user1.send_response({"room": room_id, "username": player2}, "matched")
-            await user2.send_response({"room": room_id, "username": player1}, "matched")
+            await user1.send_response({"room": room_id, "user": {"username": player2, "gender": player2info["gender"]}}, "matched")
+            await user2.send_response({"room": room_id, "user": {"username": player1, "gender": player1info["gender"]}}, "matched")
         await asyncio.sleep(0.1)
 
 @app.get("/")
@@ -119,23 +120,53 @@ async def join_matchmaking(request: Request):
     if not username:
         return Response(status_code=401, content="Invalid token")
     
+    user = connections[username]
+    if not user.active or not user.GENDER or not user.AGE or not user.INTERESTS:
+        return Response(status_code=403, content="Need login first")
+    
+    
     if username in connections:
-        match_maker.add_player(username, {"username": username})
+        match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS)
         return Response(status_code=200, content="Joined matchmaking")
     else:
         return Response(status_code=403, content="Need login first")
+
+@app.post("/setup/info")
+async def setup_info(request: Request):
+    token = request.headers.get("Authorization", None)
+    if not token:
+        return Response(status_code=401, content="Invalid token")
+    username = verify_token(token)
+    if not username:
+        return Response(status_code=401, content="Invalid token")
+    
+    
+    
+    data = await request.json()
+    age = int(data.get("age", None))
+    gender = data.get("gender", None)
+    interests = data.get("interests", [])
+    
+    if not age or not gender or age < 18 or gender not in ["male", "female"] or not interests:
+        return Response(status_code=400, content="Missing or invalid fields")
+    
+    temp_data_setup[username] = {"age": age, "gender": gender, "interests": interests, "datetime": datetime.now()}
+    return Response(status_code=200, content="Setup info received")
     
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
     username = verify_token(token)
-    if username:
+    if username and username in temp_data_setup:
         await ws.accept()
+    elif not username in temp_data_setup:
+        await ws.close(code=403, reason="Setup info missing")
+        return
     else:
         await ws.close(code=403, reason="Invalid token")
         return
     
-    user = User(ws, username)
+    user = User(ws, username, temp_data_setup.pop(username))
     try:
         while True:
             try:
@@ -159,13 +190,18 @@ async def ws_endpoint(ws: WebSocket):
         await user.logout()
 
 class User():
-    def __init__(self, ws: WebSocket, username: str):
+    def __init__(self, ws: WebSocket, username: str, setup_info: dict):
         self.username = username
         self.my_rooms = []
         self.ws = ws
         self.active = True
         
         connections[username] = self
+        
+        self.GENDER = setup_info["gender"]
+        self.AGE = setup_info["age"]
+        self.INTERESTS = setup_info["interests"]
+        
     
     async def logout(self):
     # Supprimer l'utilisateur des connexions et des rooms d'abord

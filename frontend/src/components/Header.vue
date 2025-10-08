@@ -12,7 +12,7 @@ const store = useUserStore()
 <template>
     <div class="navbar bg-base-100 border-b border-base-300">
         <div class="flex-1">
-            <button @click="ws.match.value.matched = 'waiting'" class="btn btn-ghost text-xl">Chat avec: {{ ws.match.value.user || '...' }}</button>
+            <button @click="ws.match.value.matched = 'waiting'" class="btn btn-ghost text-xl">Chat avec: {{ ws.match.value.opponent.username || '...' }}</button>
         </div>
     <div class="flex-none">
         <div class="dropdown dropdown-end">
