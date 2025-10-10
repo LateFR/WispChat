@@ -1,9 +1,9 @@
 import { useUserStore } from '@/stores/user'
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export async function requestMatch() {
     const store = useUserStore()
-    const response = await fetch("http://192.168.1.49:5000/matchmaking/join", {
+    const response = await fetch(`${API_BASE_URL}/matchmaking/join`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

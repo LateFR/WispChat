@@ -3,7 +3,7 @@
   import ws  from '@/services/ws'
   import { useUserStore } from '@/stores/user'
   import router from '@/router'
-  import { handleLogout } from '@/services/login'
+  import { handleLogout,  validate_token } from '@/services/login'
   import Chat from './Chat.vue'
   import Loading from './Loading.vue'
   import { requestMatch } from '@/services/match'
@@ -14,6 +14,12 @@
 
 
   onMounted(() => {
+    validate_token(store.token).then(username => {
+      console.log("Token is valid for user:", username)
+      if (!username) {
+        handleLogout()
+      }
+    })
     ws.initWebSocket(async () => {
       // Ici on est sûr que le WS est connecté
       if (!await requestMatch()) { // If match request fails, it means token is invalid

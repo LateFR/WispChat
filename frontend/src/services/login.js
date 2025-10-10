@@ -1,9 +1,10 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 import ws from '@/services/ws'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
 
 function get_token(username) {
-    return fetch(`http://192.168.1.49:5000/token?username=` + username, {
+    return fetch(`${API_BASE_URL}/token?username=` + username, {
         method: "GET"
     })
 }
@@ -11,7 +12,10 @@ function get_token(username) {
 async function get_and_process_token(username) {
   const response = await get_token(username)
   if (response.status === 200) {
-    const json = await response.json()
+    const json = await response.json().catch(error => {
+      console.error("Error while getting token:", error)
+      throw new Error("Server unreachable")
+    })
     const token = json.token
     localStorage.setItem("token", token)
 
@@ -31,14 +35,19 @@ async function get_and_process_token(username) {
 
 
 export async function validate_token(token) {
-    const response = await fetch("http://192.168.1.49:5000/token/validate?token=" + token, {
-        method: "GET"
-    })
-    if (response.status === 200) {
-        return response.text().then(text => {
-            return text
+    try {
+        const response = await fetch(`${API_BASE_URL}/token/validate?token=` + token, {
+            method: "GET"
         })
-    } else {
+        if (response.status === 200) {
+            return response.text().then(text => {
+                return text
+            })
+        } else {
+            return null
+        }
+    } catch (error) {
+        console.warn("Error while validating token:", error)
         return null
     }
 }
@@ -46,7 +55,7 @@ export async function validate_token(token) {
 export async function logout(token) {
     localStorage.removeItem("username")
     localStorage.removeItem("token")
-    const response = await fetch("http://192.168.1.49:5000/token/logout?token=" + token, {
+    const response = await fetch(`${API_BASE_URL}/token/logout?token=` + token, {
         method: "GET"
     })
     if (response.status === 200) {
@@ -86,7 +95,7 @@ export function handleLogout() {
 
 export async function sendSetupInfo(age, gender, interests) {
     const store = useUserStore()
-    const response = await fetch("http://192.168.1.49:5000/setup/info", {
+    const response = await fetch(`${API_BASE_URL}/setup/info`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

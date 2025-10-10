@@ -8,6 +8,7 @@
     const hasNewMessage = ref(false)
     const store = useUserStore()
 
+
     // Surveiller les nouveaux messages
     watch(() => ws.parsedMessages().length, async (newLength, oldLength) => {
         if (newLength > oldLength) {

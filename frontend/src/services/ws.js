@@ -3,6 +3,7 @@ import { useUserStore } from '@/stores/user'
 import router from '@/router'
 import { validate_token, tryReSetup } from '@/services/login'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const ws = ref(null)
 const myRooms = ref([])
 const messages = ref([])
@@ -14,7 +15,6 @@ let store
 // init websocket
 function initWebSocket(onOpenCallback=null) {
     store = useUserStore()
-    const host = window.location.hostname || "localhost"
     
     validate_token(store.token).then(username => {
         if (!username) {
@@ -35,7 +35,8 @@ function initWebSocket(onOpenCallback=null) {
             }
             
             try {
-                ws.value = new WebSocket(`ws://${host}:5000/ws?token=${store.token}`)
+                const host = API_BASE_URL.replace(/^http/, 'ws')
+                ws.value = new WebSocket(`${host}/ws?token=` + store.token)
             } catch (error) {
                 console.error(error)
                 events.value.push({"error": error.message})
