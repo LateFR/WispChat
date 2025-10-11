@@ -17,9 +17,8 @@ export default defineConfig({
     },
   },
   server: {
-    proxy: {
-      '/token': 'http://192.178.1.49:5000',
-      '/ws': 'ws://192.178.1.49:5000'
-    }
+    host: true,
+    port: 5173,
+    allowedHosts: true
   }
 })
