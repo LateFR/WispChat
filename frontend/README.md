@@ -16,6 +16,12 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 npm install
 ```
 
+```sh
+mkdir public/css
+wget -O public/css/daisy-full.css https://cdn.jsdelivr.net/npm/daisyui@4/dist/full.css
+```
+
+
 ### Compile and Hot-Reload for Development
 
 ```sh
