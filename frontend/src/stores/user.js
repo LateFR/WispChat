@@ -13,7 +13,8 @@ export const useUserStore = defineStore("user", {
                 console.warn("Erreur parsing setupInfo:", e)
                 return null
             }
-        })()
+        })(),
+        interfaceState: "popup" // "popup", "waiting", "animating", "chat"
     }),
     actions: {
         login(username, token) {

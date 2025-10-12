@@ -9,11 +9,13 @@
   import { requestMatch } from '@/services/match'
   import MatchAnimation from './MatchAnimation.vue'
   import Header from './Header.vue'
+  import Popup from './PopupMode.vue'
+
   const newMessage = ref('')
   const store = useUserStore()
+  console.log("Current interface state:", store.interfaceState)
 
-
-  onMounted(() => {
+  function initMatching() {
     validate_token(store.token).then(username => {
       console.log("Token is valid for user:", username)
       if (!username) {
@@ -26,7 +28,13 @@
         handleLogout()
       }
       ws.match.value.matched = "waiting"
+      store.interfaceState = "waiting"
     })
+  }
+  onMounted(() => {
+    if (store.interfaceState !== "popup") {
+      initMatching()
+    }
   })
   
   
@@ -41,12 +49,13 @@
 
   function showChat() {
     ws.match.value.matched = "stable"
+    store.interfaceState = "chat"
   }
 
   watch(() => ws.match.value.matched, (newValue, oldValue) => {
     if (newValue === "matched" && oldValue === "waiting") {
       console.log("Transitioning to animating")
-      ws.match.value.matched = "animating"
+      store.interfaceState = "animating"
     }
     if (newValue === "waiting" && oldValue !== "waiting") {
       newMessage.value = ""
@@ -60,6 +69,11 @@
       }, 1)
     }
   })
+
+  function handlePopupModeValidation() {
+    store.interfaceState = "waiting"
+    initMatching()
+  }
 </script>
 
 <template>
@@ -69,17 +83,21 @@
       <Header />
 
       <!-- Affichage du Chat ou du Loading. Le Chat reste affiché pendant l'animation. -->
-      <Chat v-if="ws.match.value.matched !== 'waiting'" />
-      <Loading v-if="ws.match.value.matched === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
+      <Chat v-if="store.interfaceState === 'chat' || store.interfaceState === 'popup'" />
+      <Loading v-if="store.interfaceState === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
       
       <!-- L'animation en tant que véritable overlay (positionné par-dessus le chat) -->
       <MatchAnimation 
-        v-if="ws.match.value.matched === 'animating'"
+        v-if="store.interfaceState === 'animating'"
         :opponent="ws.match.value.opponent" 
         @animation-finished="showChat"
         class="absolute inset-0 flex justify-center items-center z-50"
       />
       
+      <Popup
+        v-if="store.interfaceState === 'popup'"
+        @validated="handlePopupModeValidation"
+      />
       <!-- Zone de saisie -->
       <div class="p-4 bg-base-100 border-t border-base-300">
         <form @submit.prevent="sendMessage" class="flex gap-3">
@@ -104,3 +122,44 @@
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Animation pour la popup de mode */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce-out-up {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9) translateY(-100px);
+    opacity: 0;
+  }
+}
+
+.popup-bounce-enter-active {
+  animation: bounce-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.popup-bounce-leave-active {
+  animation: bounce-out-up 0.4s ease-in-out forwards;
+}
+</style>

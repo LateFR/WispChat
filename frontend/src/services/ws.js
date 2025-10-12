@@ -8,7 +8,7 @@ const ws = ref(null)
 const myRooms = ref([])
 const messages = ref([])
 const events = ref([])
-const match = ref({"matched": "waiting", "opponent": {"username": null, "gender": null}})  //"waiting", "matched", "animating",  "stable"
+const match = ref({"matched": "waiting", "opponent": {"username": null, "gender": null}})  //"waiting", "matched",  "stable"
 
 let store
 
