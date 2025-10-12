@@ -2,7 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 import ws from '@/services/ws'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
-
+import { submitMode } from './match';
 function get_token(username) {
     return fetch(`${API_BASE_URL}/token?username=` + username, {
         method: "GET"
@@ -120,6 +120,7 @@ export async function tryReSetup(){
         if (age && gender && interests) {
             const success = await sendSetupInfo(age, gender, interests)
             if (success) {
+                await submitMode(store.mode)  // re-submit mode
                 return true
             } else {
                 return false

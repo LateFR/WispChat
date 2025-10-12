@@ -14,14 +14,15 @@ export const useUserStore = defineStore("user", {
                 return null
             }
         })(),
-        interfaceState: "popup" // "popup", "waiting", "animating", "chat"
+        interfaceState: localStorage.getItem("interfaceState") || "popup", // "popup", "waiting", "chat", "animating"
+        mode: localStorage.getItem("mode") || "date", // "chill", "date" or "interests"
     }),
     actions: {
         login(username, token) {
             this.username = username,
             this.loggedIn = true,
             this.token = token,
-            localStorage.setItem("username", username)
+            localStorage.setItem("username", username),
             localStorage.setItem("token", token)
         },
         joinRoom(room) {
@@ -43,9 +44,21 @@ export const useUserStore = defineStore("user", {
             this.token = null
             this.rooms = []
             this.setupInfo = null
+            this.interfaceState = "popup",
+            this.mode = "date"
             localStorage.removeItem("username")
             localStorage.removeItem("token")
             localStorage.removeItem("setupInfo")
+            localStorage.removeItem("interfaceState")
+            localStorage.removeItem("mode")
+        },
+        modifyKey(key, value) {
+            if (key in this) {
+                this[key] = value
+                localStorage.setItem(key, value)
+            } else {
+                console.warn(`Key "${key}" does not exist in store state`)
+            }
         }
     }
 })

@@ -6,7 +6,7 @@
   import { handleLogout,  validate_token } from '@/services/login'
   import Chat from './Chat.vue'
   import Loading from './Loading.vue'
-  import { requestMatch } from '@/services/match'
+  import { requestMatch, submitMode } from '@/services/match'
   import MatchAnimation from './MatchAnimation.vue'
   import Header from './Header.vue'
   import Popup from './PopupMode.vue'
@@ -24,11 +24,14 @@
     })
     ws.initWebSocket(async () => {
       // Ici on est sûr que le WS est connecté
+      if (!await submitMode(store.mode)) { // Submit the selected mode
+        handleLogout()
+      }
       if (!await requestMatch()) { // If match request fails, it means token is invalid
         handleLogout()
       }
       ws.match.value.matched = "waiting"
-      store.interfaceState = "waiting"
+      store.modifyKey("interfaceState", "waiting")
     })
   }
   onMounted(() => {
@@ -49,19 +52,20 @@
 
   function showChat() {
     ws.match.value.matched = "stable"
-    store.interfaceState = "chat"
+    store.modifyKey("interfaceState", "chat")
   }
 
   watch(() => ws.match.value.matched, (newValue, oldValue) => {
     if (newValue === "matched" && oldValue === "waiting") {
       console.log("Transitioning to animating")
-      store.interfaceState = "animating"
+      store.modifyKey("interfaceState", "animating")
     }
     if (newValue === "waiting" && oldValue !== "waiting") {
       newMessage.value = ""
       ws.match.value.opponent = {"username": null, "gender": null}
       ws.leaveRoom(store.rooms[0]) // leave the current room
       ws.match.value.room = null
+      store.modifyKey("interfaceState", "waiting")
       setTimeout(async () => {
         if (!await requestMatch()) { // If match request fails, it means token is invalid
           router.push("/login")
@@ -71,7 +75,7 @@
   })
 
   function handlePopupModeValidation() {
-    store.interfaceState = "waiting"
+    store.modifyKey("interfaceState", "waiting")
     initMatching()
   }
 </script>
@@ -94,10 +98,7 @@
         class="absolute inset-0 flex justify-center items-center z-50"
       />
       
-      <Popup
-        v-if="store.interfaceState === 'popup'"
-        @validated="handlePopupModeValidation"
-      />
+      
       <!-- Zone de saisie -->
       <div class="p-4 bg-base-100 border-t border-base-300">
         <form @submit.prevent="sendMessage" class="flex gap-3">
@@ -120,7 +121,14 @@
         </form>
       </div>
     </div>
+
+    
+      
   </div>
+  <Popup
+        v-if="store.interfaceState === 'popup'"
+        @validated="handlePopupModeValidation"
+      />
 </template>
 
 <style scoped>

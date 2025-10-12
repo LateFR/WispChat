@@ -1,0 +1,14 @@
+{
+    "redis": {
+        "host": "192.168.1.76",
+        "port": 6379,
+        "db": 1,
+        "password": null,
+        "redis_keys": {
+            "matchmaking": "matchmaking"
+        }
+    },
+    "match": {
+        "modes": ["chill", "date", "interests"]
+    }
+}

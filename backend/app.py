@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from fastapi.websockets import WebSocketState
 import jwt
 import os
@@ -7,22 +8,37 @@ from datetime import datetime, timedelta, UTC
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
 from matchmacker import MatchMaker
-from threading import Thread
+import redis
 import uuid
+import secrets
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "secret123")
-if SECRET_KEY == "secret123":
-    print("WARNING: SECRET_KEY is set to the default value. Please change it in production.")
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_hex(32)
+    print("⚠️ WARNING: Using a temporary random SECRET_KEY — tokens won't persist across restarts.")
+
 ALGORITHM = "HS256"
 EXPIRE_MINUTES = int(os.environ.get("EXPIRE_MINUTES", 60))
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
+brocked_connections = set() # {user, broked_time}
+
 rooms = {} # {room_name: set(usernames)}
 origins = ["http://localhost:5173", "http://192.168.1.49:5173"]
 temp_data_setup = {}
 
 match_maker = MatchMaker()
 
+with open('config.json') as f:
+    config = json.load(f)
 
+REDIS_HOST = config["redis"]["host"]
+REDIS_PORT = config["redis"]["port"]
+REDIS_DB = config["redis"]["db"]
+REDIS_PASSWORD = config["redis"]["password"]
+REDIS_MATCHMAKER_KEY = config["redis"]["redis_keys"]["matchmaking"]
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
+
+ALL_MODES = config["match"]["modes"]
 def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -50,33 +66,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def matchmaking_loop():
     global match_maker, connections
+    modes = ["chill", "date"]
     while True:
-        match = match_maker.find_match()
-        if match:
-            player1info, player2info = match
-            player1,player2 = player1info["username"], player2info["username"]
-            try: 
-                user1 = connections[player1]
-                user2 = connections[player2]
-            except KeyError:
-                if player1 in connections:
-                    match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"])
-                if player2 in connections:
-                    match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"])
-                continue
-            if not user1.active or not user2.active:
-                if user1.active:
-                    match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"])
-                if user2.active:
-                    match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"])
-                continue
-            print(f"Match found: {player1} vs {player2}")
-            room_id = str(uuid.uuid4())
-            await user1.send_response({"room": room_id, "user": {"username": player2, "gender": player2info["gender"]}}, "matched")
-            await user2.send_response({"room": room_id, "user": {"username": player1, "gender": player1info["gender"]}}, "matched")
-        await asyncio.sleep(0.1)
+        for mode in modes:
+            match = match_maker.find_match(mode)
+            if match:
+                print(mode)
+                player1info, player2info = match
+                player1, player2 = player1info["username"], player2info["username"]
+
+                try: 
+                    user1 = connections[player1]
+                    user2 = connections[player2]
+                except KeyError:
+                    # Un ou deux joueurs se sont déconnectés entre le match et la vérification.
+                    # On remet en file uniquement ceux qui sont ENCORE connectés.
+                    # Le joueur déconnecté est simplement ignoré (il a déjà été retiré de Redis par find_match).
+                    
+                    player1_still_connected = player1 in connections
+                    player2_still_connected = player2 in connections
+
+                    if player1_still_connected and not player2_still_connected:
+                        # player2 est parti, on remet player1 dans la file
+                        match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
+                    
+                    if player2_still_connected and not player1_still_connected:
+                        # player1 est parti, on remet player2 dans la file
+                        match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
+                    
+                    # Si les deux sont déconnectés, on ne fait rien.
+                    await asyncio.sleep(0.1)
+                    continue
+
+                # vérifier si les joueurs sont actifs
+                if not user1.active or not user2.active:
+                    if user1.active:
+                        match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
+                    if user2.active:
+                        match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
+                    await asyncio.sleep(0.1)
+                    continue
+
+                # match trouvé
+                print(f"Match found: {player1} vs {player2}")
+                room_id = str(uuid.uuid4())
+                await user1.send_response({"room": room_id, "user": {"username": player2, "gender": player2info["gender"]}}, "matched")
+                await user2.send_response({"room": room_id, "user": {"username": player1, "gender": player1info["gender"]}}, "matched")
+
+        await asyncio.sleep(0.2)
 
 @app.get("/")
 async def read_root():
@@ -120,13 +160,19 @@ async def join_matchmaking(request: Request):
     if not username:
         return Response(status_code=401, content="Invalid token")
     
-    user = connections[username]
-    if not user.active or not user.GENDER or not user.AGE or not user.INTERESTS:
+    if username not in connections:
         return Response(status_code=403, content="Need login first")
     
+    user = connections[username]
+    if not user.active or not user.GENDER or not user.AGE or not user.INTERESTS or not user.mode:
+        return Response(status_code=403, content="Need login first")
     
+    for mode_to_remove in ALL_MODES:
+        if mode_to_remove != user.mode: # On ne se retire pas de la file qu'on veut rejoindre
+            match_maker.remove_player(username, mode_to_remove, ignore_error=True)
+            
     if username in connections:
-        match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS)
+        match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS, user.mode)
         return Response(status_code=200, content="Joined matchmaking")
     else:
         return Response(status_code=403, content="Need login first")
@@ -152,6 +198,28 @@ async def setup_info(request: Request):
     
     temp_data_setup[username] = {"age": age, "gender": gender, "interests": interests, "datetime": datetime.now()}
     return Response(status_code=200, content="Setup info received")
+
+@app.post("/setup/mode")
+async def setup_mode(request: Request):
+    token = request.headers.get("Authorization", None)
+    username = verify_token(token)
+    if not username:
+        return Response(status_code=401, content="Invalid token")
+    
+    data = await request.json()
+    mode = data.get("mode", None)
+    if not mode or mode not in ["chill", "date", "interests"]:
+        return Response(status_code=400, content="Missing or invalid mode")
+    
+    if username in connections:
+        connections[username].mode = mode.lower()
+        print(connections[username].mode)
+        return Response(status_code=200, content="Mode updated")
+    elif username in temp_data_setup:
+        temp_data_setup[username]["mode"] = mode.lower()
+        return Response(status_code=200, content="Mode updated")
+    else:
+        return Response(status_code=403, content="Need login first")
     
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
@@ -166,7 +234,7 @@ async def ws_endpoint(ws: WebSocket):
         await ws.close(code=403, reason="Invalid token")
         return
     
-    user = User(ws, username, temp_data_setup.pop(username))
+    user = User(ws, username, temp_data_setup[username])
     try:
         while True:
             try:
@@ -187,7 +255,7 @@ async def ws_endpoint(ws: WebSocket):
                 print("Message reçu invalide :", data)
             
     except WebSocketDisconnect:
-        await user.logout()
+        user.logout()
 
 class User():
     def __init__(self, ws: WebSocket, username: str, setup_info: dict):
@@ -201,8 +269,11 @@ class User():
         self.GENDER = setup_info["gender"]
         self.AGE = setup_info["age"]
         self.INTERESTS = setup_info["interests"]
-        
-    
+        self.mode = setup_info.get("mode", "date")  # "chill", "date" or "interests"
+
+        if username in temp_data_setup:
+            temp_data_setup.pop(username)
+            
     async def logout(self):
     # Supprimer l'utilisateur des connexions et des rooms d'abord
         self.active = False
@@ -210,6 +281,8 @@ class User():
         if self.username in connections:
             connections.pop(self.username)
         
+        for mode in ALL_MODES:
+            match_maker.remove_player(self.username, mode, ignore_error=True)
         # Nettoyer les rooms sans envoyer de messages
         for room in list(self.my_rooms):  # list() pour éviter modification en boucle
             await self.leave_room({"room": room}, verbose=False)

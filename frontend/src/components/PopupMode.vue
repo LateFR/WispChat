@@ -1,7 +1,11 @@
-<!-- whatsapp/frontend/src/components/PopupMode.vue -->
+"<!-- whatsapp/frontend/src/components/PopupMode.vue -->
 
 <script setup>
 import { ref, defineEmits } from 'vue'
+import router from '@/router'
+import { submitMode } from '@/services/match'
+import { useUserStore } from '@/stores/user'
+
 const availableInterests = [
   { id: 'sport', label: 'Sport' },
   { id: 'culture', label: 'Culture' },
@@ -11,14 +15,23 @@ const availableInterests = [
   { id: 'voyages', label: 'Voyages' },
   { id: 'musique', label: 'Musique' },
 ]
-const mode = ref('interests') // 'date', 'chill', 'interests'
+const mode = ref('date') // 'date', 'chill', 'interests'
 const interests = ref([])
-
+const store = useUserStore()
 const emit = defineEmits(['validated'])
 
-function handleContinue() {
+async function handleContinue() {
   if (isValid()) {
-    emit('validated', { mode: mode.value, interests: interests.value })
+    const succes = await submitMode(mode.value)
+    if (succes) {
+      console.log("Mode submitted:", mode.value)
+      emit('validated', { mode: mode.value, interests: interests.value })
+    } else {
+      console.error("Something went wrong during mode submission.")
+      alert("Une erreur est survenue. Veuillez vous reconnecter.")
+      store.logout()
+      router.push('/login')
+    }
   }
 }
 
@@ -30,6 +43,7 @@ function isValid() {
   } else if (mode.value === 'interests') {
     return interests.value.length > 0
   }
+  return false
 }
 </script>
 
@@ -45,7 +59,7 @@ function isValid() {
       <div class="flex flex-col gap-3 mb-6">
         <button
           class="btn text-left justify-start h-auto py-3"
-          :class="{ 'btn-primary': mode === 'date' }"
+          :class="{ 'btn-secondary': mode === 'date' }"
           @click="mode = 'date'"
         >
           <div>
@@ -63,7 +77,7 @@ function isValid() {
             <div class="text-xs opacity-70 normal-case font-normal">Pour discuter sans pression et se faire des amis.</div>
           </div>
         </button>
-        <button
+        <!-- <button
           class="btn text-left justify-start h-auto py-3"
           :class="{ 'btn-primary': mode === 'interests' }"
           @click="mode = 'interests'"
@@ -72,7 +86,7 @@ function isValid() {
             <div class="font-bold">Interests</div>
             <div class="text-xs opacity-70 normal-case font-normal">Trouve quelqu'un qui partage tes passions.</div>
           </div>
-        </button>
+        </button> -->
       </div>
 
       <!-- Contenu spécifique au mode sélectionné -->
@@ -113,4 +127,4 @@ function isValid() {
       </div>
     </div>
   </div>
-</template>
+</template>"
