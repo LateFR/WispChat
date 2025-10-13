@@ -40,7 +40,12 @@ redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, passwo
 BROKEN_CONNECTIONS_KEY = config["redis"]["redis_keys"]["broked_connections"]
 REDIS_TTL = config["redis"]["ttl"]
 
+hcaptcha_enabled = config["hcaptcha"]["enabled"]
 
+if hcaptcha_enabled:
+    SECRET_KEY = os.environ.get("HSECRET", None)
+    if not SECRET_KEY:
+        raise ValueError("Missing HSECRET environment variable")
 ALL_MODES = config["match"]["modes"]
 def verify_token(token: str):
     try:

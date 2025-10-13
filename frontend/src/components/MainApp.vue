@@ -10,10 +10,11 @@
   import MatchAnimation from './MatchAnimation.vue'
   import Header from './Header.vue'
   import Popup from './PopupMode.vue'
+  import InputChat from './InputChat.vue'
 
-  const newMessage = ref('')
   const store = useUserStore()
-  console.log("Current interface state:", store.interfaceState)
+  const newMessage = ref('')
+  
 
   function initMatching() {
     validate_token(store.token).then(username => {
@@ -40,14 +41,6 @@
     }
   })
   
-  
-  // Fonction pour envoyer un message
-  async function sendMessage() {
-    if (newMessage.value.trim()) {
-      ws.sendMessage(newMessage.value)
-      newMessage.value = ''
-    }
-  }
   
 
   function showChat() {
@@ -87,6 +80,7 @@
       <Header />
 
       <Chat v-if="store.interfaceState === 'chat' || store.interfaceState === 'popup'" :opponent="ws.match.value.opponent || {}"/>
+
       <Loading v-if="store.interfaceState === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
       
       <MatchAnimation 
@@ -96,34 +90,7 @@
         class="absolute inset-0 flex justify-center items-center z-50"
       />
       
-
-      <!-- Zone de saisie -->
-      <div class="p-4 bg-base-100 border-t border-base-300">
-        <form @submit.prevent="sendMessage" class="flex gap-3">
-        <input 
-          ref="messageInput"
-          v-model="newMessage" 
-          type="text" 
-          placeholder="Tapez votre message..." 
-          class="input input-bordered w-full focus:outline-none focus:ring-2 focus:ring-primary"
-          :disabled="ws.match.value.matched !== 'stable'"
-          enterkeyhint="send"                    
-          autocomplete="off"
-        />
-        <button 
-          type="submit"
-          @mousedown.prevent   
-          @touchstart.prevent  
-          class="btn btn-primary btn-square"
-          :disabled="!newMessage.trim() || ws.match.value.matched !== 'stable'"
-        >
-          <!-- icone d'envoi déjà présente (inchangée) -->
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-          </svg>
-        </button>
-      </form>
-      </div>
+      <InputChat v-model="newMessage"/>
     </div>
 
     <Popup

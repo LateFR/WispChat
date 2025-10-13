@@ -2,8 +2,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { sendSetupInfo, tryReSetup } from '@/services/login'
 import router from '@/router'
-// useUserStore n'est pas utilisé ici, mais je le laisse au cas où tu en aurais besoin ailleurs
-// import { useUserStore } from '@/stores/user'
 
 // --- State ---
 const gender = ref(null)
@@ -45,6 +43,7 @@ async function sendSetupInfoHandler() {
   } else {
     // On pourrait afficher une alerte à l'utilisateur ici
     console.warn("Something went wrong during setup info submission.")
+    alert("Une erreur est survenue. Veuillez vous reconnecter.")
     router.push('/login')
   }
 }
@@ -96,8 +95,8 @@ onMounted(async () => {
             </select>
           </div>
 
-          <!-- Centres d'intérêt (avec des checkboxes, c'est mieux pour la sélection multiple) -->
-          <div class="form-control w-full">
+          <!-- Comming soon -->
+          <!-- <div class="form-control w-full">
             <label class="label">
               <span class="label-text">Vos centres d'intérêt (plusieurs choix possibles)</span>
             </label>
@@ -112,7 +111,8 @@ onMounted(async () => {
                 <span class="label-text">{{ interest.label }}</span>
               </label>
             </div>
-          </div>
+          </div> -->
+
 
           <!-- Bouton de soumission -->
           <div class="card-actions justify-end mt-8">

@@ -4,11 +4,15 @@
     import login from '@/services/login'
     import router from '@/router';
     import ws from '@/services/ws'
+    import VueHcaptcha from '@hcaptcha/vue3-hcaptcha';
 
     const ready = ref(false)
     const store = useUserStore()
     const username = ref("")
     const login_error = ref("")
+
+    const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY
+    const hcaptchaToken = ref(null)
 
     store.modifyKey("interfaceState", "popup") // forcer le mode popup
     onMounted(async () => {
@@ -35,6 +39,23 @@
             return
         })
     }
+
+    function onVerifyHcaptcha(token) {
+        hcaptchaToken.value = token
+        console.log("Hcaptcha token :", token)
+    }
+    function onChallegeExpired() {
+        hcaptchaToken.value = null
+        console.log("hCaptcha expired")
+        alert("Vous avez mis trop de temps de temps à valider le captcha. Veuillez réessayer.")
+        router.push("/login")
+    }
+
+    function onErrorHcaptcha(error) {
+        console.error("hCaptcha error:", error)
+        alert("Une erreur est survenue lors de la résolution du captcha. Veuillez réessayer.")
+    }
+
 </script>
 <template>
     <!-- Conteneur principal qui centre la carte verticalement et horizontalement sur toute la page -->
@@ -65,8 +86,11 @@
                         />
                     </div>
                     
+
+                    <vue-hcaptcha :sitekey="hcaptchaSiteKey" @verify="onVerifyHcaptcha" @error="onErrorHcaptcha" @expired="onChallegeExpired"></vue-hcaptcha>
+
                     <!-- Le bouton de connexion prend toute la largeur -->
-                    <button type="submit" class="btn btn-primary w-full">
+                    <button type="submit" :visible="hcaptchaToken && username.length > 0" class="btn btn-primary w-full">
                         Se connecter
                     </button>
                 </form>

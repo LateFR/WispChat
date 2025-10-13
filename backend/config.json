@@ -13,5 +13,8 @@
     },
     "match": {
         "modes": ["chill", "date", "interests"]
+    },
+    "hcaptcha": {
+        "enabled": true
     }
 }
