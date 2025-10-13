@@ -14,7 +14,7 @@ export const useUserStore = defineStore("user", {
                 return null
             }
         })(),
-        interfaceState: localStorage.getItem("interfaceState") || "popup", // "popup", "waiting", "chat", "animating"
+        interfaceState: localStorage.getItem("interfaceState") || "popup", // "popup", "popup2", "waiting", "chat", "animating"
         mode: localStorage.getItem("mode") || "date", // "chill", "date" or "interests"
     }),
     actions: {

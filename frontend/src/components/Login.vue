@@ -88,7 +88,7 @@
                     </div>
                     
 
-                    <vue-hcaptcha v-if="hcaptchaEnabled" :sitekey="hcaptchaSiteKey" @verify="onVerifyHcaptcha" @error="onErrorHcaptcha" @expired="onChallegeExpired"></vue-hcaptcha>
+                    <vue-hcaptcha v-if="hcaptchaEnabled" theme="dark" :sitekey="hcaptchaSiteKey" @verify="onVerifyHcaptcha" @error="onErrorHcaptcha" @expired="onChallegeExpired"></vue-hcaptcha>
 
                     <!-- Le bouton de connexion prend toute la largeur -->
                     <button type="submit" :disabled="(!hcaptchaToken || !hcaptchaEnabled) || !username.length > 0" class="btn btn-primary w-full">

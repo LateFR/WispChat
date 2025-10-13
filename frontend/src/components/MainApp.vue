@@ -11,7 +11,7 @@
   import Header from './Header.vue'
   import Popup from './PopupMode.vue'
   import InputChat from './InputChat.vue'
-
+  import GenericPopup from './GenericPopup.vue'
   const store = useUserStore()
   const newMessage = ref('')
   
@@ -71,13 +71,16 @@
     store.modifyKey("interfaceState", "waiting")
     initMatching()
   }
+  
+
+  const showLogoutConfirm = ref(false)
 </script>
 
 <template>
   <div class="bg-base-200 min-h-screen flex justify-center p-0 sm:p-4">
     
     <div class="flex flex-col h-screen w-full max-w-4xl bg-base-100 shadow-xl relative">
-      <Header />
+      <Header v-model="showLogoutConfirm"/>
 
       <Chat v-if="store.interfaceState === 'chat' || store.interfaceState === 'popup'" :opponent="ws.match.value.opponent || {}"/>
 
@@ -97,7 +100,14 @@
       v-if="store.interfaceState === 'popup'"
       @validated="handlePopupModeValidation"
     />
-
+    <!-- On place la popup ici. -->
+    <GenericPopup
+        v-model="showLogoutConfirm"
+        title="Confirmation"
+        content="Êtes-vous sûr de vouloir vous déconnecter ?"
+        confirm-text="Déconnexion"
+        @confirm="handleLogout"
+    />
   </div>
 </template>
 
