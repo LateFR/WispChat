@@ -109,8 +109,8 @@ function isValid() {
         </div>
 
         <div v-else class="flex items-center justify-center h-full p-4 text-center text-base-content/70">
-          <span v-if="mode === 'date'">Nous te trouverons quelqu'un qui cherche aussi une relation sérieuse.</span>
-          <span v-else>Nous te mettrons en relation avec quelqu'un pour une conversation détendue.</span>
+          <span v-if="mode === 'date'">Nous te trouverons quelqu'un qui cherche aussi une relation sérieuse. Tu ne sera mis qu'avec des personne du sexe opposé, en priorisant les individus ayant un age proche du tient.</span>
+          <span v-else>Nous te mettrons en relation avec quelqu'un pour une conversation détendue. Cette personne est completement aléatoire parmis ceux qui ont activé le mode chill</span>
         </div>
       </div>
 

@@ -84,7 +84,7 @@ watch(() => props.modelValue, (isVisible) => {
       @click.self="cancelAction"
     >
       <!-- La carte de la popup. Comme c'est l'enfant direct du conteneur flex, elle sera centrée. -->
-      <div class="card w-full max-w-md bg-base-200 shadow-xl">
+      <div class="card w-full bg-base-200 shadow-xl max-w-[600px]">
         <div class="card-body">
           <!-- Titre (optionnel) -->
           <h2 v-if="title" class="card-title text-2xl mb-2">{{ title }}</h2>
