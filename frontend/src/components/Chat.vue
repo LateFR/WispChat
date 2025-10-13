@@ -1,5 +1,5 @@
 <script setup>
-    import { ref, nextTick, watch } from 'vue'
+    import { ref, nextTick, watch, defineProps } from 'vue'
     import ws  from '@/services/ws'
     import { useUserStore } from '@/stores/user'
     
@@ -8,7 +8,12 @@
     const hasNewMessage = ref(false)
     const store = useUserStore()
 
-
+    const props = defineProps({
+      opponent: {
+        type: Object,
+        required: true
+      },
+    });
     // Surveiller les nouveaux messages
     watch(() => ws.parsedMessages().length, async (newLength, oldLength) => {
         if (newLength > oldLength) {
@@ -22,7 +27,6 @@
         }
         }
     })
-    
     // Fonction pour vérifier si l'utilisateur est en bas du scroll
     function checkIfAtBottom() {
         if (messagesContainer.value) {
@@ -82,7 +86,11 @@
           
           <!-- Header avec le nom, affiché seulement pour le premier message d'un groupe -->
           <div 
-            class="chat-header text-xs opacity-70 mb-1" 
+            class="chat-header text-xs opacity-70 mb-1"
+           :class="{
+              'text-primary': message.from !== store.username && props.opponent.gender === 'male' || message.from === store.username && store.setupInfo.gender === 'male',
+              'text-secondary': message.from !== store.username && props.opponent.gender === 'female' || message.from === store.username && store.setupInfo.gender === 'female',
+            }"
             v-if="index === 0 || message.from !== ws.parsedMessages()[index - 1].from"
           >
             {{ message.from }}
@@ -100,17 +108,21 @@
 
       <!-- Indicateur de nouveau message -->
       <transition name="slide-up">
-        <div 
-          v-if="hasNewMessage && !isUserAtBottom"
-          @click="scrollToBottom"
-          class="absolute bottom-20 left-1/2 transform -translate-x-1/2 bg-primary text-primary-content px-4 py-2 rounded-full shadow-lg cursor-pointer hover:bg-primary-focus transition-colors flex items-center gap-2 z-10"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-[4px] h-[4px]">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-          <span class="text-sm font-medium">Nouveau message</span>
-        </div>
-      </transition>
+      <div 
+        v-if="hasNewMessage && !isUserAtBottom"
+        @click="scrollToBottom"
+        class="absolute left-1/2 transform -translate-x-1/2 bg-primary text-primary-content px-3 py-2 rounded-full shadow-lg cursor-pointer hover:bg-primary-focus transition-colors flex items-center gap-2 z-10"
+        :style="{ bottom: `calc(4rem + 0.75rem + env(safe-area-inset-bottom))` }"
+        role="button"
+        aria-label="Aller en bas"
+        title="Aller en bas"
+      > 
+        <!-- SVG flèche vers le bas -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+    </transition>
 
 </template>
 

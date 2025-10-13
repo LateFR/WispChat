@@ -5,8 +5,11 @@
         "db": 1,
         "password": null,
         "redis_keys": {
-            "matchmaking": "matchmaking"
-        }
+            "matchmaking": "matchmaking",
+            "server": "server",
+            "broked_connections": "server:broken_connections"
+        },
+        "ttl": 5
     },
     "match": {
         "modes": ["chill", "date", "interests"]

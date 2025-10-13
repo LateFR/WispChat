@@ -3,7 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 export async function submitMode(mode) {
     if (!["chill", "date", "interests"].includes(mode)) {
-        console.warn(`Invalid mode "${mode}"`)
+        console.error(`Invalid mode "${mode}"`)
         return false
     }
     const store = useUserStore()

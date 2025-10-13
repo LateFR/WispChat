@@ -20,7 +20,6 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 EXPIRE_MINUTES = int(os.environ.get("EXPIRE_MINUTES", 60))
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
-brocked_connections = set() # {user, broked_time}
 
 rooms = {} # {room_name: set(usernames)}
 origins = ["http://localhost:5173", "http://192.168.1.49:5173"]
@@ -38,6 +37,10 @@ REDIS_PASSWORD = config["redis"]["password"]
 REDIS_MATCHMAKER_KEY = config["redis"]["redis_keys"]["matchmaking"]
 redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
 
+BROKEN_CONNECTIONS_KEY = config["redis"]["redis_keys"]["broked_connections"]
+REDIS_TTL = config["redis"]["ttl"]
+
+
 ALL_MODES = config["match"]["modes"]
 def verify_token(token: str):
     try:
@@ -52,7 +55,7 @@ def verify_token(token: str):
         return None
     
 async def lifespan(app: FastAPI):
-    asyncio.create_task(matchmaking_loop())
+    task = asyncio.create_task(safe_matchmaking_loop())
     yield
     # shutdown code here
 
@@ -74,7 +77,6 @@ async def matchmaking_loop():
         for mode in modes:
             match = match_maker.find_match(mode)
             if match:
-                print(mode)
                 player1info, player2info = match
                 player1, player2 = player1info["username"], player2info["username"]
 
@@ -117,6 +119,27 @@ async def matchmaking_loop():
                 await user2.send_response({"room": room_id, "user": {"username": player1, "gender": player1info["gender"]}}, "matched")
 
         await asyncio.sleep(0.2)
+
+async def safe_matchmaking_loop():
+    while True:
+        try:
+            print("Starting matchmaking loop")
+            await matchmaking_loop()
+        except Exception as e:
+            print(f"[ERROR] matchmaking loop crashed: {e}")
+            await asyncio.sleep(1)  # éviter crash en boucle infinie rapide
+
+def get_brocken_users():
+    cursor = 0
+    broken_users = []
+    
+    while True:
+        cursor, users = redis_client.scan(cursor=cursor, match=f"{BROKEN_CONNECTIONS_KEY}:*", count=100)
+        if cursor == 0:
+            break
+        for user in users:
+            broken_users.append(user)
+    return [k.split(":")[1] for k in broken_users]
 
 @app.get("/")
 async def read_root():
@@ -220,21 +243,45 @@ async def setup_mode(request: Request):
         return Response(status_code=200, content="Mode updated")
     else:
         return Response(status_code=403, content="Need login first")
+
+@app.get("/matchmaking/stats/people")
+async def people_live(request: Request):
+    token = request.headers.get("Authorization", None)
+    username = verify_token(token)
+    if not username:
+        return Response(status_code=401, content="Invalid token")
     
+    for mode in match_maker.keys:
+        len(redis_client.hkeys(mode))
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
     username = verify_token(token)
-    if username and username in temp_data_setup:
+    if not username:
+        await ws.close(code=403, reason="Invalid token")
+        return
+    
+    broken_users = get_brocken_users()
+    if username and username in temp_data_setup or username in broken_users:
         await ws.accept()
-    elif not username in temp_data_setup:
+    elif username in list(connections.keys()):
+        await ws.close(code=403, reason="Unauthorized")
+        return
+    elif not username in temp_data_setup and not username in broken_users:
         await ws.close(code=403, reason="Setup info missing")
         return
     else:
         await ws.close(code=403, reason="Invalid token")
         return
     
-    user = User(ws, username, temp_data_setup[username])
+    
+    if username in broken_users:
+        data = json.loads(redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
+        redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
+        connections[username] = user
+    else:
+        data = temp_data_setup[username]
+    user = User(ws, username, data)
     try:
         while True:
             try:
@@ -255,7 +302,7 @@ async def ws_endpoint(ws: WebSocket):
                 print("Message reçu invalide :", data)
             
     except WebSocketDisconnect:
-        user.logout()
+        await user.logout()
 
 class User():
     def __init__(self, ws: WebSocket, username: str, setup_info: dict):
@@ -280,6 +327,12 @@ class User():
         
         if self.username in connections:
             connections.pop(self.username)
+            redis_client.set(f"{BROKEN_CONNECTIONS_KEY}:{self.username}", json.dumps({
+                "gender": self.GENDER,
+                "age": self.AGE,
+                "interests": self.INTERESTS,
+                "mode": self.mode
+            }), ex=REDIS_TTL * 60) 
         
         for mode in ALL_MODES:
             match_maker.remove_player(self.username, mode, ignore_error=True)
@@ -306,6 +359,7 @@ class User():
             self.my_rooms.remove(room_name)
             rooms[room_name].remove(self.username)
         if verbose:
+            print("Left room", room_name)
             await self.send_response(f"Left room {room_name}", "leave_room")
         
         if len(list(rooms[room_name].copy())) == 0:

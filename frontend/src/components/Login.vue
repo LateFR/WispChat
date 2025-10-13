@@ -10,7 +10,7 @@
     const username = ref("")
     const login_error = ref("")
 
-    store.modifyKey("mode", "popup") // forcer le mode popup
+    store.modifyKey("interfaceState", "popup") // forcer le mode popup
     onMounted(async () => {
         const isReconnectable = await login.can_reconnect()
         if (isReconnectable) {

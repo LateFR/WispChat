@@ -81,16 +81,14 @@
 </script>
 
 <template>
-  <div class="bg-base-200 min-h-screen flex justify-center p-0 sm-p-4">
-    <!-- Le conteneur `relative` est important pour que MatchAnimation puisse se positionner par-dessus -->
+  <div class="bg-base-200 min-h-screen flex justify-center p-0 sm:p-4">
+    
     <div class="flex flex-col h-screen w-full max-w-4xl bg-base-100 shadow-xl relative">
       <Header />
 
-      <!-- Affichage du Chat ou du Loading. Le Chat reste affiché pendant l'animation. -->
-      <Chat v-if="store.interfaceState === 'chat' || store.interfaceState === 'popup'" />
+      <Chat v-if="store.interfaceState === 'chat' || store.interfaceState === 'popup'" :opponent="ws.match.value.opponent || {}"/>
       <Loading v-if="store.interfaceState === 'waiting'" message="Waiting for match..." color="primary" type="dots" />
       
-      <!-- L'animation en tant que véritable overlay (positionné par-dessus le chat) -->
       <MatchAnimation 
         v-if="store.interfaceState === 'animating'"
         :opponent="ws.match.value.opponent" 
@@ -98,37 +96,42 @@
         class="absolute inset-0 flex justify-center items-center z-50"
       />
       
-      
+
       <!-- Zone de saisie -->
       <div class="p-4 bg-base-100 border-t border-base-300">
         <form @submit.prevent="sendMessage" class="flex gap-3">
-          <input 
-            v-model="newMessage" 
-            type="text" 
-            placeholder="Tapez votre message..." 
-            class="input input-bordered w-full focus:outline-none focus:ring-2 focus:ring-primary"
-            :disabled="ws.match.value.matched !== 'stable'"
-          />
-          <button 
-            type="submit" 
-            class="btn btn-primary btn-square"
-            :disabled="!newMessage.trim() || ws.match.value.matched !== 'stable'"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-            </svg>
-          </button>
-        </form>
+        <input 
+          ref="messageInput"
+          v-model="newMessage" 
+          type="text" 
+          placeholder="Tapez votre message..." 
+          class="input input-bordered w-full focus:outline-none focus:ring-2 focus:ring-primary"
+          :disabled="ws.match.value.matched !== 'stable'"
+          enterkeyhint="send"                    
+          autocomplete="off"
+        />
+        <button 
+          type="submit"
+          @mousedown.prevent   
+          @touchstart.prevent  
+          class="btn btn-primary btn-square"
+          :disabled="!newMessage.trim() || ws.match.value.matched !== 'stable'"
+        >
+          <!-- icone d'envoi déjà présente (inchangée) -->
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+        </button>
+      </form>
       </div>
     </div>
 
-    
-      
+    <Popup
+      v-if="store.interfaceState === 'popup'"
+      @validated="handlePopupModeValidation"
+    />
+
   </div>
-  <Popup
-        v-if="store.interfaceState === 'popup'"
-        @validated="handlePopupModeValidation"
-      />
 </template>
 
 <style scoped>
