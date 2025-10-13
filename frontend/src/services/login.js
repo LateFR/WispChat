@@ -3,14 +3,18 @@ import ws from '@/services/ws'
 import { useUserStore } from '@/stores/user'
 import router from '@/router'
 import { submitMode } from './match';
-function get_token(username) {
-    return fetch(`${API_BASE_URL}/token?username=` + username, {
-        method: "GET"
+function get_token(username, hcaptchaToken) {
+    return fetch(`${API_BASE_URL}/token?username=${username}`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+            "hcaptcha-token": hcaptchaToken
+        }
     })
 }
 
-async function get_and_process_token(username) {
-  const response = await get_token(username)
+async function get_and_process_token(username, hcaptchaToken) {
+  const response = await get_token(username, hcaptchaToken)
   if (response.status === 200) {
     const json = await response.json().catch(error => {
       console.error("Error while getting token:", error)

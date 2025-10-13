@@ -11,7 +11,9 @@
     const username = ref("")
     const login_error = ref("")
 
-    const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY
+    const hcaptchaEnabled = import.meta.env.VITE_HCAPTCHA_ENABLED
+    
+    const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY || ""
     const hcaptchaToken = ref(null)
 
     store.modifyKey("interfaceState", "popup") // forcer le mode popup
@@ -28,7 +30,7 @@
    
     function handleLogin() {
         if (!username.value) return
-        login.get_and_process_token(username.value).then(token => {
+        login.get_and_process_token(username.value, hcaptchaToken.value).then(token => {
             if (!token) return
             store.login(username.value, token)
             username.value = ""
@@ -42,7 +44,6 @@
 
     function onVerifyHcaptcha(token) {
         hcaptchaToken.value = token
-        console.log("Hcaptcha token :", token)
     }
     function onChallegeExpired() {
         hcaptchaToken.value = null
@@ -87,10 +88,10 @@
                     </div>
                     
 
-                    <vue-hcaptcha :sitekey="hcaptchaSiteKey" @verify="onVerifyHcaptcha" @error="onErrorHcaptcha" @expired="onChallegeExpired"></vue-hcaptcha>
+                    <vue-hcaptcha v-if="hcaptchaEnabled" :sitekey="hcaptchaSiteKey" @verify="onVerifyHcaptcha" @error="onErrorHcaptcha" @expired="onChallegeExpired"></vue-hcaptcha>
 
                     <!-- Le bouton de connexion prend toute la largeur -->
-                    <button type="submit" :visible="hcaptchaToken && username.length > 0" class="btn btn-primary w-full">
+                    <button type="submit" :disabled="(!hcaptchaToken || !hcaptchaEnabled) || !username.length > 0" class="btn btn-primary w-full">
                         Se connecter
                     </button>
                 </form>

@@ -2,6 +2,7 @@ import asyncio
 import json
 import random
 from fastapi.websockets import WebSocketState
+import httpx
 import jwt
 import os
 from datetime import datetime, timedelta, UTC
@@ -43,9 +44,11 @@ REDIS_TTL = config["redis"]["ttl"]
 hcaptcha_enabled = config["hcaptcha"]["enabled"]
 
 if hcaptcha_enabled:
-    SECRET_KEY = os.environ.get("HSECRET", None)
-    if not SECRET_KEY:
+    HSECRET = os.environ.get("HSECRET", None)
+    if not HSECRET:
         raise ValueError("Missing HSECRET environment variable")
+    
+    
 ALL_MODES = config["match"]["modes"]
 def verify_token(token: str):
     try:
@@ -58,6 +61,17 @@ def verify_token(token: str):
         return None
     except jwt.InvalidTokenError:
         return None
+
+async def verify_hcaptcha(token: str, secret_key: str = HSECRET) -> bool:
+    url = "https://hcaptcha.com/siteverify"
+    params = {
+        "secret": secret_key,
+        "response": token
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, params=params)
+        result = response.json()
+        return result.get("success", False)
     
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(safe_matchmaking_loop())
@@ -151,10 +165,20 @@ async def read_root():
     return "I work!"
 
 @app.get("/token")
-async def get_token(username: str):
+async def get_token(username: str, request: Request):
     users = connections.keys()
     if username in users:
         return Response(status_code=409, content=f"Username {username} already exists")
+    
+    if hcaptcha_enabled:
+        hcaptcha_token = request.headers.get("hcaptcha-token", None)
+        if not hcaptcha_token:
+            return Response(status_code=401, content="Invalid token")
+        
+        valid = await verify_hcaptcha(hcaptcha_token, HSECRET)
+        if not valid:
+            return Response(status_code=401, content="Invalid token")
+        
     expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
     payload = {"sub": username, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
