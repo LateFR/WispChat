@@ -2,6 +2,7 @@
     import { ref, nextTick, watch, defineProps } from 'vue'
     import ws  from '@/services/ws'
     import { useUserStore } from '@/stores/user'
+    import arrowDown from '@/assets/arrow-down.png'
     
     const messagesContainer = ref(null)
     const isUserAtBottom = ref(true)
@@ -117,10 +118,7 @@
         aria-label="Aller en bas"
         title="Aller en bas"
       > 
-        <!-- SVG flèche vers le bas -->
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-        </svg>
+        <img src="@/assets/arrow-down.png" alt="new messages" class="w-[36px] h-[36px]"></img>
       </div>
     </transition>
 
@@ -140,7 +138,7 @@
 }
 
 .slide-up-leave-to {
-  transform: translate(-50%, 20px);
+  transform: translate(0%, 20px);
   opacity: 0;
 }
 
