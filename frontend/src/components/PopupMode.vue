@@ -1,10 +1,10 @@
-"<!-- whatsapp/frontend/src/components/PopupMode.vue -->
-
+<!-- whatsapp/frontend/src/components/PopupMode.vue -->
 <script setup>
-import { ref, defineEmits } from 'vue'
+import { ref, defineEmits, computed } from 'vue'
 import router from '@/router'
 import { submitMode } from '@/services/match'
 import { useUserStore } from '@/stores/user'
+import GenericPopup from './GenericPopup.vue'
 
 const availableInterests = [
   { id: 'sport', label: 'Sport' },
@@ -19,42 +19,49 @@ const mode = ref('date') // 'date', 'chill', 'interests'
 const interests = ref([])
 const store = useUserStore()
 const emit = defineEmits(['validated'])
+const isVisible = ref(true)
 
 async function handleContinue() {
-  if (isValid()) {
-    const succes = await submitMode(mode.value)
-    if (succes) {
-      console.log("Mode submitted:", mode.value)
+  if (!isValid.value) return;
+
+  const success = await submitMode(mode.value)
+  if (success) {
+    console.log("Mode submitted:", mode.value)
+    isVisible.value = false // Déclenche l'animation de fermeture
+    // On attend la fin de l'animation avant de notifier le parent, pour éviter un "saut" visuel
+    setTimeout(() => {
       emit('validated', { mode: mode.value, interests: interests.value })
-    } else {
-      console.error("Something went wrong during mode submission.")
-      alert("Une erreur est survenue. Veuillez vous reconnecter.")
-      store.logout()
-      router.push('/login')
-    }
+    }, 300); // Doit correspondre à la durée de la transition CSS de GenericPopup
+  } else {
+    console.error("Something went wrong during mode submission.")
+    alert("Une erreur est survenue. Veuillez vous reconnecter.")
+    store.logout()
+    router.push('/login')
   }
 }
 
-function isValid() {
-  if (mode.value === 'date') {
-    return true
-  } else if (mode.value === 'chill') {
-    return true
-  } else if (mode.value === 'interests') {
-    return interests.value.length > 0
+const isValid = computed(() => {
+  if (mode.value === 'date' || mode.value === 'chill') {
+    return true;
   }
-  return false
-}
+  if (mode.value === 'interests') {
+    return interests.value.length > 0;
+  }
+  return false;
+});
 </script>
 
 <template>
-  <!-- Overlay qui couvre tout et centre la popup -->
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-    <!-- La carte de la popup -->
-    <div class="bg-base-200 rounded-2xl shadow-xl p-6 w-full max-w-[400px] max-h-[90vh] overflow-y-auto">
-      <!-- Titre amélioré : plus grand et plus engageant -->
-      <h2 class="text-2xl font-bold text-center mb-6">Comment veux-tu discuter ?</h2>
-
+  <GenericPopup
+    v-model="isVisible"
+    title="Comment veux-tu discuter ?"
+    confirm-text="Valider"
+    :show-cancel-button="false"
+    :confirm-disabled="!isValid"
+    :persistent="true"
+    @confirm="handleContinue"
+  >
+    <template #content>
       <!-- Boutons de sélection de mode -->
       <div class="flex flex-col gap-3 mb-6">
         <button
@@ -64,7 +71,7 @@ function isValid() {
         >
           <div>
             <div class="font-bold">Date</div>
-            <div class="text-xs opacity-70 normal-case font-normal">Recherche l'amour ou une connexion sérieuse.</div>
+            <div class="text-xs opacity-70 normal-case font-normal">Recherche l'amour ou le flirt.</div>
           </div>
         </button>
         <button
@@ -109,22 +116,10 @@ function isValid() {
         </div>
 
         <div v-else class="flex items-center justify-center h-full p-4 text-center text-base-content/70">
-          <span v-if="mode === 'date'">Nous te trouverons quelqu'un qui cherche aussi une relation sérieuse. Tu ne sera mis qu'avec des personne du sexe opposé, en priorisant les individus ayant un age proche du tient.</span>
-          <span v-else>Nous te mettrons en relation avec quelqu'un pour une conversation détendue. Cette personne est completement aléatoire parmis ceux qui ont activé le mode chill</span>
+          <span v-if="mode === 'date'">Nous te trouverons quelqu'un qui cherche aussi une relation sérieuse. Tu ne seras mis qu'avec des personnes du sexe opposé, en priorisant les individus ayant un âge proche du tien.</span>
+          <span v-else>Nous te mettrons en relation avec quelqu'un pour une conversation détendue. Cette personne est complètement aléatoire parmi ceux qui ont activé le mode chill.</span>
         </div>
       </div>
-
-      <!-- Bouton de validation -->
-      <div class="card-actions justify-end mt-6">
-        <button
-          type="submit"
-          class="btn btn-primary btn-block"
-          :disabled="!isValid()"
-          @click="handleContinue"
-        >
-          Valider
-        </button>
-      </div>
-    </div>
-  </div>
-</template>"
+    </template>
+  </GenericPopup>
+</template>
