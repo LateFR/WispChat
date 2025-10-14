@@ -16,6 +16,20 @@
     const hcaptchaSiteKey = import.meta.env.VITE_HCAPTCHA_SITE_KEY || ""
     const hcaptchaToken = ref(null)
 
+    const usernamePattern = /^[a-zA-Z0-9_-]+$/;
+
+    function validateInput(event) {
+        const value = event.target.value
+        if (!usernamePattern.test(value)) {
+            event.target.value = value.replace(/[^a-zA-Z0-9_-]/g, '')
+            username.value = event.target.value
+            login_error.value = "N'utilisez que des lettres, des chiffres, des tirets et des underscores."
+        } else {
+            login_error.value = ""
+        }
+    }
+
+
     store.modifyKey("interfaceState", "popup") // forcer le mode popup
     onMounted(async () => {
         const isReconnectable = await login.can_reconnect()
@@ -29,18 +43,31 @@
 
    
     function handleLogin() {
-        if (!username.value) return
-        login.get_and_process_token(username.value, hcaptchaToken.value).then(token => {
-            if (!token) return
-            store.login(username.value, token)
-            username.value = ""
-            console.log("Logged in")
-            router.push("/setup")
-        }).catch (error => {
+        login_error.value = ""
+
+        try {
+            if (!username.value)
+                throw new Error("Veuillez entrer un nom d'utilisateur.")
+
+            if (!usernamePattern.test(username.value))
+                throw new Error("Le nom d'utilisateur contient des caractères non autorisés (lettres, chiffres, _ et - seulement).")
+
+            login.get_and_process_token(username.value, hcaptchaToken.value)
+                .then(token => {
+                    if (!token) return
+                    store.login(username.value, token)
+                    username.value = ""
+                    console.log("Logged in")
+                    router.push("/setup")
+                })
+                .catch(error => {
+                    login_error.value = error.message
+                })
+        } catch (error) {
             login_error.value = error.message
-            return
-        })
+        }
     }
+
 
     function onVerifyHcaptcha(token) {
         hcaptchaToken.value = token
@@ -84,6 +111,8 @@
                             type="text" 
                             placeholder="Entrez votre pseudo..." 
                             class="input input-bordered w-full" 
+                            :maxlength="16"
+                            @input="validateInput"
                         />
                     </div>
                     

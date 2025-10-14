@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import re
 from fastapi.websockets import WebSocketState
 import httpx
 import jwt
@@ -20,6 +21,7 @@ if not SECRET_KEY:
 
 ALGORITHM = "HS256"
 EXPIRE_MINUTES = int(os.environ.get("EXPIRE_MINUTES", 60))
+USERNAME_ACCEPTED_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
 
 rooms = {} # {room_name: set(usernames)}
@@ -148,13 +150,13 @@ async def safe_matchmaking_loop():
             print(f"[ERROR] matchmaking loop crashed: {e}")
             await asyncio.sleep(1)  # éviter crash en boucle infinie rapide
 
-def get_brocken_users():
+def get_broken_users():
     cursor = 0
     broken_users = []
     
     while True:
         cursor, users = redis_client.scan(cursor=cursor, match=f"{BROKEN_CONNECTIONS_KEY}:*", count=100)
-        if cursor == 0:
+        if cursor != 0:
             break
         for user in users:
             broken_users.append(user)
@@ -167,8 +169,15 @@ async def read_root():
 @app.get("/token")
 async def get_token(username: str, request: Request):
     users = connections.keys()
+    
+    if not USERNAME_ACCEPETED_PATTERN.match(username):
+        return Response(
+            status_code=400,
+            content="Invalid username format"
+        )
+    
     if username in users:
-        return Response(status_code=409, content=f"Username {username} already exists")
+        return Response(status_code=409, content=f"Username {username} already taken")
     
     if hcaptcha_enabled:
         hcaptcha_token = request.headers.get("hcaptcha-token", None)
@@ -180,6 +189,7 @@ async def get_token(username: str, request: Request):
             return Response(status_code=401, content="Invalid token")
         
     expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
+    username = username[:16]
     payload = {"sub": username, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -287,27 +297,26 @@ async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
     username = verify_token(token)
     if not username:
-        await ws.close(code=403, reason="Invalid token")
+        await ws.close(code=1008, reason="Invalid token")
         return
     
-    broken_users = get_brocken_users()
+    broken_users = get_broken_users()
     if username and username in temp_data_setup or username in broken_users:
         await ws.accept()
     elif username in list(connections.keys()):
-        await ws.close(code=403, reason="Unauthorized")
+        await ws.close(code=1008, reason="Unauthorized")
         return
     elif not username in temp_data_setup and not username in broken_users:
-        await ws.close(code=403, reason="Setup info missing")
+        await ws.close(code=1008, reason="Setup info missing")
         return
     else:
-        await ws.close(code=403, reason="Invalid token")
+        await ws.close(code=1008, reason="Invalid token")
         return
     
     
     if username in broken_users:
         data = json.loads(redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
         redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
-        connections[username] = user
     else:
         data = temp_data_setup[username]
     user = User(ws, username, data)

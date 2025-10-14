@@ -2,7 +2,6 @@
     import { ref, nextTick, watch, defineProps } from 'vue'
     import ws  from '@/services/ws'
     import { useUserStore } from '@/stores/user'
-    import arrowDown from '@/assets/arrow-down.png'
     
     const messagesContainer = ref(null)
     const isUserAtBottom = ref(true)
