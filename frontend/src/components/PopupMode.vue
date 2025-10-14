@@ -122,7 +122,7 @@ function isValid() {
           :disabled="!isValid()"
           @click="handleContinue"
         >
-          Trouver un match !
+          Valider
         </button>
       </div>
     </div>

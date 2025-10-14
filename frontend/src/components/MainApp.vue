@@ -110,18 +110,21 @@ const popup1Active = ref(store.interfaceState === 'popup1')
       @validated="handlePopupModeValidation"
     />
     <GenericPopup
-        v-model="popup1Active"
-        title="Enjoy 🎉"
-        content="
-          Bienvenue sur eavy.chat ! En cliquant validant cette popup, vous serez mis en relation avec une personne aléatoire.
-          Soyez respectueux et ne partagez pas d’informations sensibles.
-          Si vous rafraîchissez la page ou demandez un nouveau match, vous perdrez l’actuel.
-          Si vous shouaitez vraiment poursuivre avec votre match, échangez vos contact! Faites attention, certain individus peuvent etre mal intentionné :)
-          Enjoy ! Codé avec amour ❤️
-        "
-         :show-cancel-button="false"
-        @confirm="handlePopupCongratValidation"
-    />
+      v-model="popup1Active"
+      title="Bienvenue 🎉"
+      :show-cancel-button="false"
+      @confirm="handlePopupCongratValidation"
+    >
+      <template #content>
+        <p>Bienvenue sur <strong>eavy.chat</strong> !</p>
+        <p>En validant cette popup, vous serez mis en relation avec une personne aléatoire.</p>
+        <p>⚠️ Soyez respectueux et ne partagez pas d’informations sensibles.</p>
+        <p>Si vous rafraîchissez la page ou demandez un nouveau match, vous perdrez l’actuel.</p>
+        <p>Faites attention, certains individus peuvent être mal intentionnés 🙂</p>
+        <p>Enjoy ! Codé avec amour ❤️</p>
+      </template>
+    </GenericPopup>
+
     <!-- On place la popup ici. -->
     <GenericPopup
         v-model="showLogoutConfirm"

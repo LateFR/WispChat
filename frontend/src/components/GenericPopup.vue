@@ -71,13 +71,6 @@ watch(() => props.modelValue, (isVisible) => {
 <template>
   <!-- Le composant <transition> de Vue gère les animations d'entrée/sortie -->
   <transition name="popup-fade">
-    <!-- 
-      L'overlay qui assombrit le fond.
-      - `fixed inset-0`: Fait en sorte que ce div prenne 100% de la largeur et de la hauteur de la fenêtre du navigateur.
-      - `z-[9999]`: S'assure qu'il est au-dessus de tout le reste.
-      - `flex items-center justify-center`: C'EST LA PARTIE IMPORTANTE. Cela transforme le div en conteneur Flexbox
-        et centre son enfant direct (la carte de la popup) à la fois verticalement (`items-center`) et horizontalement (`justify-center`).
-    -->
     <div
       v-if="modelValue"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] p-4 flex items-center justify-center"
@@ -89,8 +82,12 @@ watch(() => props.modelValue, (isVisible) => {
           <!-- Titre (optionnel) -->
           <h2 v-if="title" class="card-title text-2xl mb-2">{{ title }}</h2>
           
-          <!-- Contenu principal -->
-          <p class="text-base-content/80">{{ content }}</p>
+          <!-- Main content -->
+          <div class="text-base-content/80">
+            <slot name="content">{{ content }}</slot>
+          </div>
+
+
           
           <!-- Section des boutons -->
           <div class="card-actions justify-end mt-6 space-x-2">
