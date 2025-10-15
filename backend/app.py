@@ -13,7 +13,9 @@ from matchmacker import MatchMaker
 import redis
 import uuid
 import secrets
+from dotenv import load_dotenv
 
+load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY", "secret123")
 if not SECRET_KEY:
     SECRET_KEY = secrets.token_hex(32)
@@ -170,7 +172,7 @@ async def read_root():
 async def get_token(username: str, request: Request):
     users = connections.keys()
     
-    if not USERNAME_ACCEPETED_PATTERN.match(username):
+    if not USERNAME_ACCEPTED_PATTERN.match(username):
         return Response(
             status_code=400,
             content="Invalid username format"

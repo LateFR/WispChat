@@ -14,8 +14,7 @@ const props = defineProps({
     default: '',
   },
   content: {
-    type: String,
-    required: true,
+    type: String
   },
   confirmText: {
     type: String,

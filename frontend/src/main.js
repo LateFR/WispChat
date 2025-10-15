@@ -1,11 +1,5 @@
 import './main.css'
 
-const cssLink = document.createElement('link');
-cssLink.rel = 'stylesheet';
-cssLink.href = import.meta.env.MODE === 'production'
-  ? '/css/daisy-min.css'   // fichier minifié dans /public/css/
-  : '/css/daisy-full.css'; // fichier complet pour dev
-document.head.appendChild(cssLink);
 
 import { createApp } from 'vue'
 import App from './App.vue'
