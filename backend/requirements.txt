@@ -2,6 +2,6 @@ fastapi
 uvicorn
 uvicorn[standard]
 PyJWT
-redis
+aioredis
 httpx
 python-dotenv

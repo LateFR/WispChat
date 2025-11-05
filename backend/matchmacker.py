@@ -1,5 +1,6 @@
+import asyncio
 from typing import Literal
-import redis
+import redis.asyncio as aioredis
 import json
 import time
 
@@ -16,10 +17,10 @@ class MatchMaker():
     MAX_AGE_DIFFERENCE = 100
 
     def __init__(self):
-        self.redis = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
+        self.redis = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
         self.keys = {"chill": REDIS_MATCHMAKER_KEY + ":waiting_players:chill", "date": REDIS_MATCHMAKER_KEY + ":waiting_players:date"}
 
-    def add_player(self, player:str, gender:str, age:int, interests:list, mode:Literal["chill", "date"]):
+    async def add_player(self, player:str, gender:str, age:int, interests:list, mode:Literal["chill", "date"]):
         player_data = {
             "username": player,
             "gender": gender,
@@ -27,41 +28,41 @@ class MatchMaker():
             "interests": interests,
             "join_time": time.time()
         }
-        self.redis.hset(self.keys[mode], player, json.dumps(player_data))
+        await self.redis.hset(self.keys[mode], player, json.dumps(player_data))
 
-    def remove_player(self, player, mode:Literal["chill", "date"], ignore_error=False):
+    async def remove_player(self, player, mode:Literal["chill", "date"], ignore_error=False):
         try:
-            self.redis.hdel(self.keys[mode], player)
+            await self.redis.hdel(self.keys[mode], player)
         except Exception as e:
             if not ignore_error:
                 raise e
 
-    def get_player(self, player:str, mode:Literal["chill", "date"], remove:bool=False):
+    async def get_player(self, player:str, mode:Literal["chill", "date"], remove:bool=False):
         # Cette fonction est moins utilisée maintenant mais on la garde pour le mode chill
-        player_data = self.redis.hget(self.keys[mode], player)
+        player_data = await self.redis.hget(self.keys[mode], player)
         if player_data:
             try:
                 data = json.loads(player_data)
             except json.JSONDecodeError:
                 raise ValueError("Invalid player data")
             if remove:
-                self.remove_player(player, mode)
+                await self.remove_player(player, mode)
             return data
         else:
             raise KeyError(f"Player {player} does not exist")
 
     
-    def find_match(self, mode:Literal["chill", "date"]):
+    async def find_match(self, mode:Literal["chill", "date"]):
         if mode == "chill":
-            waiting_players = self.redis.hkeys(self.keys[mode])
+            waiting_players = await self.redis.hkeys(self.keys[mode])
             if len(waiting_players) >= 2:
-                player1 = self.get_player(waiting_players[0], remove=True, mode=mode)
-                player2 = self.get_player(waiting_players[1], remove=True, mode=mode)
+                player1 = await self.get_player(waiting_players[0], remove=True, mode=mode)
+                player2 = await self.get_player(waiting_players[1], remove=True, mode=mode)
                 return (player1, player2)
             return None
 
         if mode == "date":
-            all_players_data = self.redis.hgetall(self.keys[mode])
+            all_players_data = await self.redis.hgetall(self.keys[mode])
             if len(all_players_data) < 2:
                 return None
 
@@ -85,6 +86,7 @@ class MatchMaker():
             # 2. Trier le groupe prioritaire (femmes) par temps d'attente
             women.sort(key=lambda p: p.get("join_time", float('inf')))
 
+            i = 0
             # 3. Itérer sur chaque femme (chercheuse) pour lui trouver le meilleur partenaire
             for woman in women:
                 best_partner_for_her = None
@@ -93,7 +95,9 @@ class MatchMaker():
                 # On cherche le meilleur partenaire pour cette femme spécifique
                 for man in men:
                     age_diff = abs(woman.get("age", 99) - man.get("age", 99))
-                    
+                    if i % 10 == 0:
+                        await asyncio.sleep(0) #let the loop keep the control
+                    i+=1
                     if age_diff < min_age_diff:
                         min_age_diff = age_diff
                         best_partner_for_her = man
@@ -101,8 +105,8 @@ class MatchMaker():
                 # 4. Si un partenaire a été trouvé ET qu'il respecte le seuil
                 if best_partner_for_her and min_age_diff <= self.MAX_AGE_DIFFERENCE:
                     # Match trouvé !
-                    self.remove_player(woman["username"], mode)
-                    self.remove_player(best_partner_for_her["username"], mode)
+                    await self.remove_player(woman["username"], mode)
+                    await self.remove_player(best_partner_for_her["username"], mode)
                     
                     # On retourne le match et on arrête la recherche pour ce cycle
                     return (woman, best_partner_for_her)

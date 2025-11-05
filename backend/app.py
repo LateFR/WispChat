@@ -7,10 +7,10 @@ import httpx
 import jwt
 import os
 from datetime import datetime, timedelta, UTC
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Response
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
 from matchmacker import MatchMaker
-import redis
+import redis.asyncio as aioredis
 import uuid
 import secrets
 from dotenv import load_dotenv
@@ -40,7 +40,8 @@ REDIS_PORT = config["redis"]["port"]
 REDIS_DB = config["redis"]["db"]
 REDIS_PASSWORD = config["redis"]["password"]
 REDIS_MATCHMAKER_KEY = config["redis"]["redis_keys"]["matchmaking"]
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
+
+redis_client = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, password=REDIS_PASSWORD, decode_responses=True)
 
 BROKEN_CONNECTIONS_KEY = config["redis"]["redis_keys"]["broked_connections"]
 REDIS_TTL = config["redis"]["ttl"]
@@ -66,7 +67,7 @@ def verify_token(token: str):
     except jwt.InvalidTokenError:
         return None
 
-async def verify_hcaptcha(token: str, secret_key: str = HSECRET) -> bool:
+async def verify_hcaptcha(token: str, secret_key: str) -> bool:
     url = "https://hcaptcha.com/siteverify"
     params = {
         "secret": secret_key,
@@ -98,7 +99,7 @@ async def matchmaking_loop():
     modes = ["chill", "date"]
     while True:
         for mode in modes:
-            match = match_maker.find_match(mode)
+            match = await match_maker.find_match(mode)
             if match:
                 player1info, player2info = match
                 player1, player2 = player1info["username"], player2info["username"]
@@ -116,11 +117,11 @@ async def matchmaking_loop():
 
                     if player1_still_connected and not player2_still_connected:
                         # player2 est parti, on remet player1 dans la file
-                        match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
+                        await match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
                     
                     if player2_still_connected and not player1_still_connected:
                         # player1 est parti, on remet player2 dans la file
-                        match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
+                        await match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
                     
                     # Si les deux sont déconnectés, on ne fait rien.
                     await asyncio.sleep(0.1)
@@ -129,9 +130,9 @@ async def matchmaking_loop():
                 # vérifier si les joueurs sont actifs
                 if not user1.active or not user2.active:
                     if user1.active:
-                        match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
+                        await match_maker.add_player(player1, player1info["gender"], player1info["age"], player1info["interests"], mode)
                     if user2.active:
-                        match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
+                        await match_maker.add_player(player2, player2info["gender"], player2info["age"], player2info["interests"], mode)
                     await asyncio.sleep(0.1)
                     continue
 
@@ -152,17 +153,17 @@ async def safe_matchmaking_loop():
             print(f"[ERROR] matchmaking loop crashed: {e}")
             await asyncio.sleep(1)  # éviter crash en boucle infinie rapide
 
-def get_broken_users():
+async def get_broken_users():
     cursor = 0
     broken_users = []
-    
     while True:
-        cursor, users = redis_client.scan(cursor=cursor, match=f"{BROKEN_CONNECTIONS_KEY}:*", count=100)
-        if cursor != 0:
+        cursor, users = await redis_client.scan(cursor=cursor, match=f"{BROKEN_CONNECTIONS_KEY}:*", count=100)
+        if users:
+            broken_users.extend(users)
+        if cursor == 0:
             break
-        for user in users:
-            broken_users.append(user)
-    return [k.split(":")[1] for k in broken_users]
+    return [k.split(":", 1)[1] for k in broken_users]
+
 
 @app.get("/")
 async def read_root():
@@ -197,6 +198,16 @@ async def get_token(username: str, request: Request):
     
     return {"token": token}
 
+@app.get("/token/username-exist")
+async def get_username_exist(username: str):
+    users = set(connections.keys())
+    
+    if not USERNAME_ACCEPTED_PATTERN.match(username):
+        raise HTTPException(status_code=400, detail="Invalid username format")
+    
+    exist = username in users
+        
+    return {"exist": exist}
 @app.get("/token/validate")
 async def validate_token(token: str):
     username = verify_token(token)
@@ -233,7 +244,7 @@ async def join_matchmaking(request: Request):
     
     for mode_to_remove in ALL_MODES:
         if mode_to_remove != user.mode: # On ne se retire pas de la file qu'on veut rejoindre
-            match_maker.remove_player(username, mode_to_remove, ignore_error=True)
+            await match_maker.remove_player(username, mode_to_remove, ignore_error=True)
             
     if username in connections:
         match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS, user.mode)
@@ -293,7 +304,7 @@ async def people_live(request: Request):
         return Response(status_code=401, content="Invalid token")
     
     for mode in match_maker.keys:
-        len(redis_client.hkeys(mode))
+        len(await redis_client.hkeys(mode))
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     token = ws.query_params["token"]
@@ -302,7 +313,7 @@ async def ws_endpoint(ws: WebSocket):
         await ws.close(code=1008, reason="Invalid token")
         return
     
-    broken_users = get_broken_users()
+    broken_users = await get_broken_users()
     if username and username in temp_data_setup or username in broken_users:
         await ws.accept()
     elif username in list(connections.keys()):
@@ -317,8 +328,8 @@ async def ws_endpoint(ws: WebSocket):
     
     
     if username in broken_users:
-        data = json.loads(redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
-        redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
+        data = json.loads(await redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
+        await redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
     else:
         data = temp_data_setup[username]
     user = User(ws, username, data)
@@ -367,7 +378,7 @@ class User():
         
         if self.username in connections:
             connections.pop(self.username)
-            redis_client.set(f"{BROKEN_CONNECTIONS_KEY}:{self.username}", json.dumps({
+            await redis_client.set(f"{BROKEN_CONNECTIONS_KEY}:{self.username}", json.dumps({
                 "gender": self.GENDER,
                 "age": self.AGE,
                 "interests": self.INTERESTS,
@@ -447,4 +458,4 @@ class User():
 if __name__ == "__main__":
     import uvicorn
     
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=5001, reload=True)
