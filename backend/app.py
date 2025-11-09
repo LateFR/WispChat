@@ -27,7 +27,7 @@ USERNAME_ACCEPTED_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 connections = {} # {username: {"ws": WebSocket, "rooms": []}}
 
 rooms = {} # {room_name: set(usernames)}
-origins = ["http://localhost:5173", "http://192.168.1.49:5173"]
+origins = ["http://localhost:5173", "http://192.168.1.50:5173"]
 temp_data_setup = {}
 
 match_maker = MatchMaker()
@@ -192,7 +192,7 @@ async def get_token(username: str, request: Request):
             return Response(status_code=401, content="Invalid token")
         
     expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
-    username = username[:16]
+    username = username[:20]
     payload = {"sub": username, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     
@@ -200,12 +200,11 @@ async def get_token(username: str, request: Request):
 
 @app.get("/token/username-exist")
 async def get_username_exist(username: str):
-    users = set(connections.keys())
     
     if not USERNAME_ACCEPTED_PATTERN.match(username):
         raise HTTPException(status_code=400, detail="Invalid username format")
     
-    exist = username in users
+    exist = username in set(connections.keys())
         
     return {"exist": exist}
 @app.get("/token/validate")
