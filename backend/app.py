@@ -246,7 +246,7 @@ async def join_matchmaking(request: Request):
             await match_maker.remove_player(username, mode_to_remove, ignore_error=True)
             
     if username in connections:
-        match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS, user.mode)
+        await match_maker.add_player(username, user.GENDER, user.AGE, user.INTERESTS, user.mode)
         return Response(status_code=200, content="Joined matchmaking")
     else:
         return Response(status_code=403, content="Need login first")
@@ -313,25 +313,29 @@ async def ws_endpoint(ws: WebSocket):
         return
     
     broken_users = await get_broken_users()
-    if username and username in temp_data_setup or username in broken_users:
-        await ws.accept()
-    elif username in list(connections.keys()):
-        await ws.close(code=1008, reason="Unauthorized")
-        return
-    elif not username in temp_data_setup and not username in broken_users:
-        await ws.close(code=1008, reason="Setup info missing")
-        return
+    if username and username in connections:
+        ws.accept()
+        user = connections[username]
     else:
-        await ws.close(code=1008, reason="Invalid token")
-        return
-    
-    
-    if username in broken_users:
-        data = json.loads(await redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
-        await redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
-    else:
-        data = temp_data_setup[username]
-    user = User(ws, username, data)
+        if username and username in temp_data_setup or username in broken_users:
+            await ws.accept()
+        elif username in list(connections.keys()):
+            await ws.close(code=1008, reason="Unauthorized")
+            return
+        elif not username in temp_data_setup and not username in broken_users:
+            await ws.close(code=1008, reason="Setup info missing")
+            return
+        else:
+            await ws.close(code=1008, reason="Invalid token")
+            return
+        
+        
+        if username in broken_users:
+            data = json.loads(await redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
+            await redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
+        else:
+            data = temp_data_setup[username]
+        user = User(ws, username, data)
     try:
         while True:
             try:
@@ -385,7 +389,7 @@ class User():
             }), ex=REDIS_TTL * 60) 
         
         for mode in ALL_MODES:
-            match_maker.remove_player(self.username, mode, ignore_error=True)
+            await match_maker.remove_player(self.username, mode, ignore_error=True)
         # Nettoyer les rooms sans envoyer de messages
         for room in list(self.my_rooms):  # list() pour éviter modification en boucle
             await self.leave_room({"room": room}, verbose=False)
