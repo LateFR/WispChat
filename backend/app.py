@@ -312,51 +312,63 @@ async def ws_endpoint(ws: WebSocket):
         await ws.close(code=1008, reason="Invalid token")
         return
     
+    await ws.accept()
     broken_users = await get_broken_users()
-    if username and username in connections:
-        ws.accept()
-        user = connections[username]
+    
+    # === PATCH : Fermer l'ancienne connexion si elle existe ===
+    if username in connections:
+        old_user = connections[username]
+        print(f"⚠️ User {username} reconnecting - closing old connection")
+        
+        # Marquer comme inactif pour éviter les envois sur l'ancienne WS
+        old_user.active = False
+        
+        # Fermer proprement l'ancienne WebSocket
+        try:
+            if old_user.ws.application_state == WebSocketState.CONNECTED:
+                await old_user.ws.close(code=1000, reason="New connection established")
+        except Exception as e:
+            print(f"Old websocket already closed or error: {e}")
+        
+        # Réutiliser l'objet User existant avec la nouvelle WebSocket
+        old_user.ws = ws
+        old_user.active = True
+        user = old_user
+        print(f"✅ User {username} reconnected - WebSocket updated")
     else:
-        if username and username in temp_data_setup or username in broken_users:
-            await ws.accept()
-        elif username in list(connections.keys()):
-            await ws.close(code=1008, reason="Unauthorized")
-            return
-        elif not username in temp_data_setup and not username in broken_users:
-            await ws.close(code=1008, reason="Setup info missing")
-            return
-        else:
-            await ws.close(code=1008, reason="Invalid token")
-            return
-        
-        
-        if username in broken_users:
+        # Création d'un nouvel utilisateur (première connexion)
+        if username in temp_data_setup:
+            data = temp_data_setup[username]
+        elif username in broken_users:
             data = json.loads(await redis_client.get(f"{BROKEN_CONNECTIONS_KEY}:{username}"))
             await redis_client.delete(f"{BROKEN_CONNECTIONS_KEY}:{username}")
         else:
-            data = temp_data_setup[username]
+            await ws.close(code=1008, reason="Setup info missing")
+            return
+        
         user = User(ws, username, data)
+    # === FIN DU PATCH ===
+    
     try:
         while True:
             try:
-                data = await ws.receive_text()  # on reçoit en texte
-                content = json.loads(data)      # parse JSON
-                
+                data = await ws.receive_text()
+                content = json.loads(data)
                 
                 action = content["action"]
-                if action == "join": # {"action": "join", "room": "room_name"}
+                if action == "join":
                     await user.join_room(content)
-                elif action == "leave_room": # {"action": "leave_room", "room": "room_name"}
+                elif action == "leave_room":
                     await user.leave_room(content)
-                elif action == "send": # {"action": "send", "room": "room_name", "message": "message"}
+                elif action == "send":
                     await user.send_message(content)
-                # traitement ici
+                    
             except json.JSONDecodeError:
-                # ignore ou log l’erreur
                 print("Message reçu invalide :", data)
             
     except WebSocketDisconnect:
         await user.logout()
+
 
 class User():
     def __init__(self, ws: WebSocket, username: str, setup_info: dict):
@@ -365,7 +377,9 @@ class User():
         self.ws = ws
         self.active = True
         
-        connections[username] = self
+        
+        if username not in connections:
+            connections[username] = self
         
         self.GENDER = setup_info["gender"]
         self.AGE = setup_info["age"]
@@ -413,7 +427,7 @@ class User():
             self.my_rooms.remove(room_name)
             rooms[room_name].remove(self.username)
         if verbose:
-            print("Left room", room_name)
+            print(f"[{self.username}] Left room", room_name)
             await self.send_response(f"Left room {room_name}", "leave_room")
         
         if len(list(rooms[room_name].copy())) == 0:
@@ -421,6 +435,7 @@ class User():
             return
         
         for username in list(rooms[room_name].copy()):
+            print(f'[{username}] Will receive from server: "left room {room_name}" ')
             await connections[username].send_response(self.username, "user_left")
         
     async def send_message(self, content: dict):
