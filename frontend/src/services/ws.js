@@ -49,7 +49,7 @@ function initWebSocket(onOpenCallback=null) {
             ws.value.onmessage = (event) => {
                 const json = JSON.parse(event.data)
                 if (json.action == "receive_message") {
-                    messages.value.push({"from_user": json.from_user, "content": json.content})
+                    messages.value.push({"from_user": json.content.from_user, "content": json.content.message})
                 } else if (json.action == "login") {
                     console.log("Logged in")
                     events.value.push({"login": json.content})
@@ -113,7 +113,7 @@ function leaveRoom(room) {
 
     if (ws.value.readyState === WebSocket.OPEN) {
         sendJSON({"action": "leave_room", "room": room})
-        myRooms.value = myRooms.value.filter(r => r !== room)
+        smyRooms.value = myRooms.value.filter(r => r !== room)
         console.log("Left " + room)
         store.leaveRoom(room)
         localStorage.setItem("rooms", JSON.stringify(myRooms.value))
